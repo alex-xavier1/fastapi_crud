@@ -1,6 +1,4 @@
 #make the necessary changes in models and update 
-only for test code
-
 from sqlalchemy import Column, Integer, String
 from database import Base
 
