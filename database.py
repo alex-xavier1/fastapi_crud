@@ -1,4 +1,5 @@
-#do the changes in db and update
+#update database based on your needs.
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
