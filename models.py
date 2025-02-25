@@ -1,5 +1,5 @@
-#change necessary fields
-from sqlalchemy import Column, Integer, String
+#change necessary fields and update
+from sqlalchemy import Column, Integer, Stringgit
 from database import Base
 
 class Item(Base):
