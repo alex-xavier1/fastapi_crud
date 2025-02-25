@@ -1,4 +1,4 @@
-#changes done...models updated...updtedlist
+#changes done...models updated...updatedlist
 test
 changes done
 #get the changes in models and update
