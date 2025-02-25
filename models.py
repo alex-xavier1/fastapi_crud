@@ -1,4 +1,6 @@
-#make the necessary changes in models and update 
+#make the necessary changes in models and update  
+import json
+import os
 from sqlalchemy import Column, Integer, String
 from database import Base
 
