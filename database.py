@@ -1,7 +1,4 @@
-#updated dependencies
-import json
-import models
-
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -13,4 +10,3 @@ Base = declarative_base()
 
 Database_user
 Database_userid
-db_creds
