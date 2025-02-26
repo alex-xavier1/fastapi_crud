@@ -16,3 +16,5 @@ Database_userid
 db_creds
 datbase
 db
+
+database_session
