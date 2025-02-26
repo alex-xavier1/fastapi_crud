@@ -14,4 +14,5 @@ class Item(Base):
     quantity = Column(Integer)
 
 class Task(Base):
-    id = Colum()
+    id = Column
+    name = Column(string,index=True)
