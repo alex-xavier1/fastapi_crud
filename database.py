@@ -1,4 +1,6 @@
-#update database based on your needs.
+#updated dependencies
+import json
+import models
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
