@@ -1,6 +1,3 @@
-Thank you for providing the issues. I'll fix the code based on the problems you've identified. Here's the corrected version:
-
-```python
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -16,4 +13,5 @@ class Item(Base):
     quantity = Column(Integer)
 
 class Task(Base):
-    id = Colum()
+    id = ColumnS
+    name = Column(string,index=True)
