@@ -12,3 +12,6 @@ class Item(Base):
     description = Column(String)
     price = Column(Integer)
     quantity = Column(Integer)
+
+class Task(Base):
+    id = Colum()
