@@ -1,8 +1,7 @@
-#changes done...models updated...updatedlist
 from sqlalchemy import Column, Integer, String
-from database import Base
-import datetime
-import json
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
 
 class Item(Base):
     __tablename__ = "items"
@@ -14,5 +13,5 @@ class Item(Base):
     quantity = Column(Integer)
 
 class Task(Base):
-    id = Column
+    id = ColumnS
     name = Column(string,index=True)
