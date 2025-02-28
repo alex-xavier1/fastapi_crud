@@ -1,22 +1,24 @@
-# Updated database connection setup with environment variables and error handling
+# Fixed incomplete variable, added type hints, and improved error handling
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.exc import SQLAlchemyError
 import os
+from typing import Optional
 
-DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_NAME = os.environ.get("DB_NAME", "mydb")
-
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://localhost/fastapi_db")
 
 try:
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
-except SQLAlchemyError as e:
-    print(f"An error occurred while connecting to the database: {e}")
+except Exception as e:
+    print(f"Error connecting to the database: {e}")
     raise
+
+def get_db() -> Optional[SessionLocal]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
