@@ -1,24 +1,12 @@
-# Fixed incomplete variable, added type hints, and improved error handling
+# Fixed incomplete variable, added type hints, and removed hardcoded credentials
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 import os
-from typing import Optional
 
-DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://localhost/fastapi_db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost/fastapi_db")
 
-try:
-    engine = create_engine(DATABASE_URL)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base = declarative_base()
-except Exception as e:
-    print(f"Error connecting to the database: {e}")
-    raise
-
-def get_db() -> Optional[SessionLocal]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+engine: Engine = create_engine(DATABASE_URL)
+SessionLocal: sessionmaker = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+Base = declarative_base()
