@@ -1,10 +1,10 @@
-# Fixed imports, removed unused code, and improved naming conventions
+# Fixed imports, removed unused code, and improved database configuration
 
-import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:admin@localhost/fastapi_db")
+DATABASE_URL = "postgresql://postgres:admin@localhost/fastapi_db"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+Base = declarative_base()
