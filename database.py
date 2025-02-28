@@ -1,4 +1,4 @@
-# Fixed imports, removed unused code, and improved database configuration
+# Updated imports, removed unused code, and improved naming conventions
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
