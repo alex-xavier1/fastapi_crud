@@ -1,0 +1,27 @@
+name: SonarQube Scan
+
+on:
+  pull_request:
+    branches:
+      - main  # or your default branch name
+
+jobs:
+  sonar:
+    runs-on: windows  # You can change this to windows or macOS if needed
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  # Check out the PR code
+
+      - name: Set up SonarQube scanner
+        uses: sonarsource/sonarcloud-github-action@v1.0
+        with:
+          sonar-token: ${{ secrets.SONARQUBE_TOKEN }}  # Set your SonarQube token here
+
+      - name: Run SonarQube analysis
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=PR_Agent \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://your-sonarqube-server:9000 \
+            -Dsonar.login=${{ secrets.SONARQUBE_TOKEN }}
