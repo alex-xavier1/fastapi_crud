@@ -1,4 +1,4 @@
-# Improved database configuration with environment variables and SQLAlchemy setup
+# Improved database configuration with environment variables and cleaned up imports
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
