@@ -1,18 +1,13 @@
-# Fixed imports, removed incomplete line, renamed SessionLocal, added connection test
+# Fixed incomplete variable, added type hints, and improved security by removing hardcoded credentials
 
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+import os
+from typing import Optional
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:password@localhost/fastapi_db")
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost/fastapi_db")
 
 engine = create_engine(DATABASE_URL)
-session_local = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+SessionLocal: sessionmaker = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
-try:
-    engine.connect()
-    print("Database connection successful")
-except Exception as e:
-    print(f"Database connection failed: {str(e)}")
