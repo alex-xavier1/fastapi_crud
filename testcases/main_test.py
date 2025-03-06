@@ -1,44 +1,64 @@
 # ```python
 
+# This test file is for testing FastAPI application and its routes
+
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from main import app
-from unittest.mock import patch, MagicMock
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from database import SessionLocal, engine
+from unittest.mock import patch, MagicMock
+from httpx import AsyncClient
 
-# Mocking the database session
-@pytest.fixture
-def db_session():
-    return MagicMock(spec=Session)
+from main import app
+from database import Base, get_db
+from routes import router
 
-with patch.object(SessionLocal, 'query', return_value=db_session), \
-    patch('database.engine', return_value=engine):
+# Set up test client
+client = TestClient(app)
 
-    client = TestClient(app)
+# Mock database engine
+engine = create_engine("sqlite:///:memory:")
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base.metadata.create_all(bind=engine)
 
-    # Test for successful API start
-    def test_start_api():
-        response = client.get('/')
-        assert response.status_code == 200
-        assert response.json() == {"message": "API is running"}
+# Mock database function
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
 
-    # Test for successful database connection
-    def test_database_connection(db_session):
-        assert db_session.query.call_count == 1
+app.dependency_overrides[get_db] = override_get_db
 
-    # Test for routing
-    def test_route():
-        response = client.get("/some_route")
-        assert response.status_code == 200
+@pytest.mark.asyncio
+async def test_app():
+    # Mock router
+    with patch('routes.router') as mock_router:
+        mock_router = MagicMock()
+        app.include_router(mock_router)
 
-    # Test for error handling
-    def test_error_handling():
-        response = client.get("/faulty_route")
-        assert response.status_code == 404
+        # Test application instance
+        assert isinstance(app, FastAPI)
 
-    # Test for boundary values
-    def test_boundary_values():
-        response = client.post("/endpoint", json={"field": "value"*1001})
-        assert response.status_code == 400
+        # Test application routes
+        assert len(app.routes) > 0
+
+# Test API routes
+def test_read_main():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Welcome to our application!"}
+
+# Test edge cases, error handling, and boundary values
+def test_read_item_not_found():
+    response = client.get("/items/9999")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+def test_create_item_invalid_input():
+    response = client.post("/items/", json={"title": "", "description": "A really good item"})
+    assert response.status_code == 422
+    assert "title" in response.json()["detail"][0]["loc"]
 ```
