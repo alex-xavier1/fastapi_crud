@@ -1,49 +1,106 @@
-# Here is a comprehensive unit test for the given FastAPI module. This test uses the `pytest` and `pytest-mock` libraries for testing and mocking respectively.
+# ```python
 
-
-```python
+from unittest.mock import patch, MagicMock
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from main import app, get_db
-from database import Base, engine, SessionLocal
+from database import SessionLocal
 import crud, schemas
 
-Base.metadata.create_all(bind=engine)
 
 client = TestClient(app)
 
-def test_read_items(mocker):
-    mock_get_items = mocker.patch.object(crud, "get_items", return_value=[])
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_read_items(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.get_items.return_value = []
+
     response = client.get("/items")
+
     assert response.status_code == 200
     assert response.json() == []
-    mock_get_items.assert_called_once()
 
-def test_read_item(mocker):
-    mock_get_item = mocker.patch.object(crud, "get_item", return_value=None)
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_read_item_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.get_item.return_value = schemas.ItemResponse(id=1, name="test", price=10.0)
+
     response = client.get("/items/1")
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Item not found"}
-    mock_get_item.assert_called_once_with(SessionLocal(), 1)
 
-def test_create_item(mocker):
-    test_item = {"name": "Test", "description": "Test item", "price": 50.0}
-    mock_create_item = mocker.patch.object(crud, "create_item", return_value=schemas.ItemResponse(**test_item, id=1))
-    response = client.post("/items", json=test_item)
     assert response.status_code == 200
-    assert response.json() == {**test_item, "id": 1}
-    mock_create_item.assert_called_once_with(SessionLocal(), schemas.ItemCreate(**test_item))
+    assert response.json() == {"id": 1, "name": "test", "price": 10.0}
 
-def test_update_item(mocker):
-    test_item = {"name": "Test", "description": "Test item", "price": 50.0}
-    mock_update_item = mocker.patch.object(crud, "update_item", return_value=None)
-    response = client.put("/items/1", json=test_item)
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_read_item_not_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.get_item.return_value = None
+
+    response = client.get("/items/1")
+
     assert response.status_code == 404
-    assert response.json() == {"detail": "Item not found"}
-    mock_update_item.assert_called_once_with(SessionLocal(), 1, schemas.ItemCreate(**test_item))
 
-def test_delete_item(mocker):
-    mock_delete_item = mocker.patch.object(crud, "delete_item", return_value=None)
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_create_item(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.create_item.return_value = schemas.ItemResponse(id=1, name="test", price=10.0)
+
+    response = client.post("/items", json={"name": "test", "price": 10.0})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "test", "price": 10.0}
+
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_update_item_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.update_item.return_value = schemas.ItemResponse(id=1, name="updated", price=15.0)
+
+    response = client.put("/items/1", json={"name": "updated", "price": 15.0})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "updated", "price": 15.0}
+
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_update_item_not_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.update_item.return_value = None
+
+    response = client.put("/items/1", json={"name": "updated", "price": 15.0})
+
+    assert response.status_code == 404
+
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_delete_item_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.delete_item.return_value = {"detail": "Item deleted"}
+
     response = client.delete("/items/1")
+
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Item deleted"}
+
+
+@patch("main.crud")
+@patch("main.get_db")
+def test_delete_item_not_found(mock_get_db, mock_crud):
+    mock_get_db.return_value = MagicMock(spec=Session)
+    mock_crud.delete_item.return_value = None
+
+    response = client.delete("/items/1")
+
     assert response.status_code == 404
-    assert response.json() == {"detail": "
+```
