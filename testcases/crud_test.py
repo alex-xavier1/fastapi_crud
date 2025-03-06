@@ -1,48 +1,63 @@
 # ```python
 
-# Tests for item operations module
+# This file contains unit tests for the item management module using FastAPI and SQLAlchemy
 
 import pytest
-from unittest.mock import Mock, patch
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from unittest.mock import patch, MagicMock
 from models import Item
 from schemas import ItemCreate
-from fastapi.testclient import TestClient
-from main import app
+import item_management
 
-client = TestClient(app)
+# Mocking the SQLAlchemy Session
+SessionLocalMock = MagicMock(spec=Session)
 
-def test_get_items():
-    with patch("sqlalchemy.orm.Session.query") as mock_query:
-        mock_query.return_value.all.return_value = []
-        assert get_items(Session()) == []
+@pytest.fixture
+def db():
+    return SessionLocalMock()
 
-def test_get_item():
-    with patch("sqlalchemy.orm.Session.query") as mock_query:
-        mock_query.return_value.filter.return_value.first.return_value = None
-        assert get_item(Session(), 1) is None
+# Mocking a sample item
+@pytest.fixture
+def item():
+    return ItemCreate(name="Test", description="Test item", price=10.0)
 
-def test_create_item():
-    with patch("sqlalchemy.orm.Session") as mock_session:
-        mock_session.add.return_value = None
-        mock_session.commit.return_value = None
-        mock_session.refresh.return_value = None
-        item = ItemCreate(name="Test Item", description="Test Description", price=100.0)
-        assert create_item(mock_session, item) is not None
+# Mocking the SQLAlchemy Item model
+@pytest.fixture
+def db_item():
+    return Item(id=1, name="Test", description="Test item", price=10.0)
 
-def test_update_item():
-    with patch("sqlalchemy.orm.Session.query") as mock_query:
-        mock_item = Mock(spec=Item)
-        mock_query.return_value.filter.return_value.first.return_value = mock_item
-        item = ItemCreate(name="Updated Item", description="Updated Description", price=200.0)
-        assert update_item(Session(), 1, item) == mock_item
+def test_get_items(db):
+    with patch.object(db, 'query', return_value=[db_item]) as mock_query:
+        result = item_management.get_items(db)
+    mock_query.assert_called_once_with(Item)
+    assert result == [db_item]
 
-def test_delete_item():
-    with patch("sqlalchemy.orm.Session.query") as mock_query:
-        mock_item = Mock(spec=Item)
-        mock_query.return_value.filter.return_value.first.return_value = mock_item
-        assert delete_item(Session(), 1) == mock_item
-        mock_item.delete.assert_called_once()
+def test_get_item(db, db_item):
+    with patch.object(db, 'query', return_value=db_item) as mock_query:
+        result = item_management.get_item(db, db_item.id)
+    mock_query.assert_called_once_with(Item)
+    assert result == db_item
+
+def test_create_item(db, item, db_item):
+    with patch.object(db, 'add'), patch.object(db, 'commit'), patch.object(db, 'refresh'):
+        result = item_management.create_item(db, item)
+        db.add.assert_called_once_with(db_item)
+        db.commit.assert_called_once()
+        db.refresh.assert_called_once_with(db_item)
+        assert result == db_item
+
+def test_update_item(db, item, db_item):
+    with patch.object(db, 'query', return_value=db_item), patch.object(db, 'commit'), patch.object(db, 'refresh'):
+        result = item_management.update_item(db, db_item.id, item)
+        db.commit.assert_called_once()
+        db.refresh.assert_called_once_with(db_item)
+        assert result == db_item
+
+def test_delete_item(db, db_item):
+    with patch.object(db, 'delete'), patch.object(db, 'commit'):
+        result = item_management.delete_item(db, db_item.id)
+        db.delete.assert_called_once_with(db_item)
+        db.commit.assert_called_once()
+        assert result == db_item
 ```
-
-This code tests the functions that perform CRUD operations on `Item` objects. It uses the `unittest.mock` library to mock the `Session` and `query` objects from `sqlalchemy.orm`, which are the external dependencies in this case. The `patch` function from `unittest.mock` is used to replace these dependencies with mock objects in the scope of the test functions. This way, we can control their behavior and avoid making actual queries to the database. When testing the `create_item`, `update_item` and `delete_item` functions, the tests verify that the appropriate methods of the `Session` object are called with the correct arguments.
