@@ -1,56 +1,42 @@
 # ```python
 
-# Unit test for SQLAlchemy database module
+# This module provides unit tests for the database connection module
 
 import os
-from unittest.mock import patch, MagicMock
-from sqlalchemy.orm import sessionmaker
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from unittest.mock import patch, MagicMock
+from typing import Optional
 
-from your_module import SessionLocal, Base
+# Mocked packages
+with patch('sqlalchemy.create_engine', return_value=MagicMock()) as mock_create_engine:
+    with patch('sqlalchemy.orm.sessionmaker', return_value=MagicMock()) as mock_sessionmaker:
+        with patch('sqlalchemy.ext.declarative.declarative_base', return_value=MagicMock()) as mock_declarative_base:
+            from database import DATABASE_URL, engine, SessionLocal, Base
 
-def test_database_url_exists(monkeypatch):
-    """
-    Test if DATABASE_URL is fetched correctly from the environment
-    """
-    monkeypatch.setenv("DATABASE_URL", "postgresql://user:password@localhost/test_db")
-    assert os.environ.get("DATABASE_URL") == "postgresql://user:password@localhost/test_db"
+def test_database_url():
+    assert DATABASE_URL == os.environ.get("DATABASE_URL", "postgresql://user:password@localhost/fastapi_db")
 
-@patch('your_module.create_engine')
-def test_create_engine_called_with_correct_url(mock_create_engine):
-    """
-    Test if create_engine is called with the correct DATABASE_URL
-    """
-    mock_create_engine.return_value = MagicMock()
-    os.environ["DATABASE_URL"] = "postgresql://user:password@localhost/test_db"
-    create_engine(os.environ.get("DATABASE_URL"))
-    mock_create_engine.assert_called_with("postgresql://user:password@localhost/test_db")
+def test_engine_creation():
+    mock_create_engine.assert_called_once_with(DATABASE_URL)
 
-@patch('your_module.sessionmaker')
-def test_sessionmaker_called_with_correct_params(mock_sessionmaker):
-    """
-    Test if sessionmaker is called with the correct parameters
-    """
-    mock_sessionmaker.return_value = MagicMock()
-    mock_engine = MagicMock()
-    sessionmaker(autocommit=False, autoflush=False, bind=mock_engine)
-    mock_sessionmaker.assert_called_with(autocommit=False, autoflush=False, bind=mock_engine)
+def test_session_local_creation():
+    mock_sessionmaker.assert_called_once_with(autocommit=False, autoflush=False, bind=engine)
 
-def test_base_instance_exists():
-    """
-    Test if Base instance is created
-    """
-    assert isinstance(Base, declarative_base().__class__)
+def test_base_creation():
+    mock_declarative_base.assert_called_once()
 
-@patch('sqlalchemy.engine.base.Engine.connect')
-def test_operational_error(mock_connect):
-    """
-    Test if OperationalError is raised when there is a connection error
-    """
-    mock_connect.side_effect = OperationalError(None, None, None)
-    with pytest.raises(OperationalError):
-        engine = create_engine(os.environ.get("DATABASE_URL"))
-        connection = engine.connect()
+# Test with invalid DATABASE_URL
+def test_invalid_database_url():
+    with patch.dict(os.environ, {'DATABASE_URL': ''}):
+        with pytest.raises(Exception):
+            create_engine(DATABASE_URL)
+
+# Test with missing DATABASE_URL
+def test_missing_database_url():
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(KeyError):
+            create_engine(DATABASE_URL)
 ```
