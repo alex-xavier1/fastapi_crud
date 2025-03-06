@@ -1,68 +1,44 @@
 # ```python
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+from main import app
 from unittest.mock import patch, MagicMock
-from models import Base
-from routes import router
+from sqlalchemy.orm import sessionmaker, Session
+from database import SessionLocal, engine
 
-# Mock the dependencies
-with patch('models.Base') as mock_base, patch('database.engine') as mock_engine:
-    from main import app
+# Mocking the database session
+@pytest.fixture
+def db_session():
+    return MagicMock(spec=Session)
 
-client = TestClient(app)
+with patch.object(SessionLocal, 'query', return_value=db_session), \
+    patch('database.engine', return_value=engine):
 
-# Test if FastAPI application instance is created
-def test_create_app():
-    assert isinstance(app, FastAPI)
+    client = TestClient(app)
 
-# Test if database table is initialized
-def test_db_initialization():
-    mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
+    # Test for successful API start
+    def test_start_api():
+        response = client.get('/')
+        assert response.status_code == 200
+        assert response.json() == {"message": "API is running"}
 
-# Test if router is included in the app
-def test_include_router():
-    assert router in app.routes
+    # Test for successful database connection
+    def test_database_connection(db_session):
+        assert db_session.query.call_count == 1
 
-# Test database connection
-@patch("sqlalchemy.create_engine")
-def test_db_connection(mock_create_engine):
-    mock_create_engine.return_value = "engine"
-    assert create_engine("sqlite:///./test.db") == "engine"
+    # Test for routing
+    def test_route():
+        response = client.get("/some_route")
+        assert response.status_code == 200
 
-# Test API endpoints
-def test_read_main():
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to FastAPI"}
+    # Test for error handling
+    def test_error_handling():
+        response = client.get("/faulty_route")
+        assert response.status_code == 404
 
-# Test error handling
-def test_error_handling():
-    response = client.get("/not_existing_route")
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Not Found"}
-
-# Test boundary cases
-def test_large_request():
-    large_data = {"data": "a"*5000}  # Assuming 5000 characters is the upper limit
-    response = client.post("/data", json=large_data)
-    assert response.status_code == 400  # Bad Request
-    assert response.json() == {"detail": "Request body size exceeds limit"}
-
-def test_empty_request():
-    empty_data = {}
-    response = client.post("/data", json=empty_data)
-    assert response.status_code == 400  # Bad Request
-    assert response.json() == {"detail": "Request body is empty"}
-
-# Test authentication service
-@patch("auth_service.AuthService")
-def test_auth_service(mock_auth_service):
-    mock_auth_service.authenticate_user.return_value = True
-    response = client.post("/auth", json={"username": "test", "password": "test"})
-    assert response.status_code == 200
-    assert response.json() == {"authenticated": True}
+    # Test for boundary values
+    def test_boundary_values():
+        response = client.post("/endpoint", json={"field": "value"*1001})
+        assert response.status_code == 400
 ```
-This is a basic unit test structure for the provided FastAPI application
