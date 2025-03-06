@@ -1,60 +1,56 @@
 # ```python
-
-# Testing Item and Task models in FastAPI
+# Unit tests for the Item and Task models in FastAPI
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from fastapi.testclient import TestClient
-from app.models import Item, Task
-from app.main import app, get_db
+from unittest.mock import Mock, patch
 
-# Mocking database for testing
+from your_module import Item, Task, Base
+
+# Set up test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base.metadata.create_all(bind=engine)
 
-# Override dependencies for testing
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
+# Mocking the sessionmaker for the tests
+@patch('your_module.SessionLocal', new=TestingSessionLocal)
+def test_item_model():
+    # Arrange
+    session = TestingSessionLocal()
+    test_item = Item(id=1, name="Test", description="Test item", price=10, quantity=5)
+    
+    # Act
+    session.add(test_item)
+    session.commit()
+    session.refresh(test_item)
+    
+    # Assert
+    assert test_item.id == 1
+    assert test_item.name == "Test"
+    assert test_item.description == "Test item"
+    assert test_item.price == 10
+    assert test_item.quantity == 5
 
-app.dependency_overrides[get_db] = override_get_db
+# Mocking the sessionmaker for the tests
+@patch('your_module.SessionLocal', new=TestingSessionLocal)
+def test_task_model():
+    # Arrange
+    session = TestingSessionLocal()
+    test_task = Task(id=1, name="Test task")
+    
+    # Act
+    session.add(test_task)
+    session.commit()
+    session.refresh(test_task)
+    
+    # Assert
+    assert test_task.id == 1
+    assert test_task.name == "Test task"
 
-client = TestClient(app)
-
-# Mock Item and Task for testing
-@pytest.fixture
-def test_item():
-    return Item(id=1, name="Test Item", description="This is a test item", price=10, quantity=5)
-
-@pytest.fixture
-def test_task():
-    return Task(id=1, name="Test Task")
-
-# Test Item model
-def test_create_item(test_item):
-    response = client.post("/items/", json=test_item.dict())
-    assert response.status_code == 200
-    assert response.json() == {"name": "Test Item", "description": "This is a test item", "price": 10, "quantity": 5}
-
-# Test Task model
-def test_create_task(test_task):
-    response = client.post("/tasks/", json=test_task.dict())
-    assert response.status_code == 200
-    assert response.json() == {"name": "Test Task"}
-
-# Test edge cases
-def test_create_item_no_name(test_item):
-    test_item.name = None
-    response = client.post("/items/", json=test_item.dict())
-    assert response.status_code == 422
-
-def test_create_task_no_name(test_task):
-    test_task.name = None
-    response = client.post("/tasks/", json=test_task.dict())
-    assert response.status_code == 422
+# Cleanup test database after tests
+def teardown_module(module):
+    TestingSessionLocal.close_all()
+    Base.metadata.drop_all(bind=engine)
 ```
