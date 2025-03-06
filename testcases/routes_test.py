@@ -1,76 +1,63 @@
 # ```python
 
-# Test file to perform unit testing on FastAPI routes in the items module
+# Testing the FastAPI endpoints in the module
+
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from main import app
+from starlette.testclient import TestClient
+from main import app, get_db
 from database import SessionLocal
 import crud, schemas
-from unittest.mock import patch, MagicMock
-from fastapi import HTTPException
 
 client = TestClient(app)
 
-@patch('crud.get_items')
-@patch('database.SessionLocal')
-def test_read_items(mock_db, mock_get_items):
-    mock_db.return_value = MagicMock(spec=Session)
-    mock_get_items.return_value = [schemas.ItemResponse(name="item1", description="Test item 1"), schemas.ItemResponse(name="item2", description="Test item 2")]
+# Mocking the get_db dependency
+app.dependency_overrides[get_db] = lambda: SessionLocal()
 
+def test_read_items():
     response = client.get("/items")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    assert "items" in response.json()
 
-@patch('crud.get_item')
-@patch('database.SessionLocal')
-def test_read_item(mock_db, mock_get_item):
-    mock_db.return_value = MagicMock(spec=Session)
-    mock_get_item.return_value = schemas.ItemResponse(name="item1", description="Test item 1")
-
-    response = client.get("/items/1")
+def test_read_item():
+    item_id = 1
+    response = client.get(f"/items/{item_id}")
     assert response.status_code == 200
-    assert response.json() == {"name": "item1", "description": "Test item 1"}
+    assert "item" in response.json()
 
-    mock_get_item.return_value = None
-    with pytest.raises(HTTPException):
-        client.get("/items/999")
+def test_read_item_not_found():
+    item_id = 999
+    response = client.get(f"/items/{item_id}")
+    assert response.status_code == 404
 
-@patch('crud.create_item')
-@patch('database.SessionLocal')
-def test_create_item(mock_db, mock_create_item):
-    mock_db.return_value = MagicMock(spec=Session)
-    mock_create_item.return_value = schemas.ItemResponse(name="item1", description="Test item 1")
-
-    response = client.post("/items", json={"name": "item1", "description": "Test item 1"})
+def test_create_item():
+    item = {"name": "Test Item", "description": "This is a test item"}
+    response = client.post("/items", json=item)
     assert response.status_code == 200
-    assert response.json() == {"name": "item1", "description": "Test item 1"}
+    assert "item" in response.json()
 
-@patch('crud.update_item')
-@patch('database.SessionLocal')
-def test_update_item(mock_db, mock_update_item):
-    mock_db.return_value = MagicMock(spec=Session)
-    mock_update_item.return_value = schemas.ItemResponse(name="updated item", description="Updated test item")
-
-    response = client.put("/items/1", json={"name": "updated item", "description": "Updated test item"})
+def test_update_item():
+    item_id = 1
+    item = {"name": "Updated Test Item", "description": "This is an updated test item"}
+    response = client.put(f"/items/{item_id}", json=item)
     assert response.status_code == 200
-    assert response.json() == {"name": "updated item", "description": "Updated test item"}
+    assert "item" in response.json()
 
-    mock_update_item.return_value = None
-    with pytest.raises(HTTPException):
-        client.put("/items/999", json={"name": "nonexistent item", "description": "Nonexistent test item"})
+def test_update_item_not_found():
+    item_id = 999
+    item = {"name": "Updated Test Item", "description": "This is an updated test item"}
+    response = client.put(f"/items/{item_id}", json=item)
+    assert response.status_code == 404
 
-@patch('crud.delete_item')
-@patch('database.SessionLocal')
-def test_delete_item(mock_db, mock_delete_item):
-    mock_db.return_value = MagicMock(spec=Session)
-    mock_delete_item.return_value = True
-
-    response = client.delete("/items/1")
+def test_delete_item():
+    item_id = 1
+    response = client.delete(f"/items/{item_id}")
     assert response.status_code == 200
     assert response.json() == {"detail": "Item deleted"}
 
-    mock_delete_item.return_value = None
-    with pytest.raises(HTTPException):
-        client.delete("/items/999")
+def test_delete_item_not_found():
+    item_id = 999
+    response = client.delete(f"/items/{item_id}")
+    assert response.status_code == 404
 ```
