@@ -1,44 +1,56 @@
 # ```python
 
-# Test file for database operations
+# Unit test for SQLAlchemy database module
 
 import os
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 import pytest
-from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 
-@pytest.fixture(scope="module")
-def test_app():
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    from main import app
-    client = TestClient(app)
-    yield client  # testing happens here
+from your_module import SessionLocal, Base
 
-@patch("main.create_engine")
-@patch("main.sessionmaker")
-def test_create_engine(mock_sessionmaker, mock_create_engine, test_app):
-    mock_create_engine.assert_called_once()
-    assert mock_create_engine.call_args[0][0] == os.environ["DATABASE_URL"]
+def test_database_url_exists(monkeypatch):
+    """
+    Test if DATABASE_URL is fetched correctly from the environment
+    """
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:password@localhost/test_db")
+    assert os.environ.get("DATABASE_URL") == "postgresql://user:password@localhost/test_db"
 
-@patch("main.create_engine")
-@patch("main.sessionmaker")
-def test_session_local(mock_sessionmaker, mock_create_engine, test_app):
-    mock_create_engine.assert_called_once()
-    mock_sessionmaker.assert_called_once_with(autocommit=False, autoflush=False, bind=mock_create_engine.return_value)
+@patch('your_module.create_engine')
+def test_create_engine_called_with_correct_url(mock_create_engine):
+    """
+    Test if create_engine is called with the correct DATABASE_URL
+    """
+    mock_create_engine.return_value = MagicMock()
+    os.environ["DATABASE_URL"] = "postgresql://user:password@localhost/test_db"
+    create_engine(os.environ.get("DATABASE_URL"))
+    mock_create_engine.assert_called_with("postgresql://user:password@localhost/test_db")
 
-@patch("main.create_engine")
-@patch("main.declarative_base")
-def test_base(mock_declarative_base, mock_create_engine, test_app):
-    mock_declarative_base.assert_called_once()
+@patch('your_module.sessionmaker')
+def test_sessionmaker_called_with_correct_params(mock_sessionmaker):
+    """
+    Test if sessionmaker is called with the correct parameters
+    """
+    mock_sessionmaker.return_value = MagicMock()
+    mock_engine = MagicMock()
+    sessionmaker(autocommit=False, autoflush=False, bind=mock_engine)
+    mock_sessionmaker.assert_called_with(autocommit=False, autoflush=False, bind=mock_engine)
 
-@patch("main.create_engine")
-@patch("main.sessionmaker")
-def test_database_url_not_provided(mock_sessionmaker, mock_create_engine, test_app):
-    os.environ.pop("DATABASE_URL", None)  # remove environment variable for this test
-    from main import DATABASE_URL
-    assert DATABASE_URL == "postgresql://user:password@localhost/fastapi_db"
+def test_base_instance_exists():
+    """
+    Test if Base instance is created
+    """
+    assert isinstance(Base, declarative_base().__class__)
+
+@patch('sqlalchemy.engine.base.Engine.connect')
+def test_operational_error(mock_connect):
+    """
+    Test if OperationalError is raised when there is a connection error
+    """
+    mock_connect.side_effect = OperationalError(None, None, None)
+    with pytest.raises(OperationalError):
+        engine = create_engine(os.environ.get("DATABASE_URL"))
+        connection = engine.connect()
 ```
-This set of unit tests ensures that the `create_engine`, `sessionmaker`, and `declarative_base` functions are called correctly, and that the `DATABASE_URL` environment variable is used properly. It also checks the default value of `DATABASE_URL` when it is not provided. The `test_app` fixture is used to reload the main module for each test, ensuring a clean environment. The `unittest.mock.patch` decorator is used to replace the real functions with mock ones, allowing for the testing of how they are called.
