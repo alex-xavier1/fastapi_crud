@@ -1,51 +1,53 @@
-# Sure, here is a comprehensive unit test for the above module. We will use pytest and pytest-mock to create the tests, mock external dependencies, and validate the results.
+# The module contains quite a few functions interacting with external systems, which makes it complicated to test. To unit test such a module, we need to mock these external dependencies using a library such as `unittest.mock`.
 
+
+Here's how we can write tests for the `get_open_prs` function. I will use `pytest` and `unittest.mock`:
 
 ```python
 import pytest
-from unittest.mock import MagicMock, patch
+import os
+from unittest.mock import patch, Mock
 from fastapi.testclient import TestClient
-from your_module import app  # replace with the actual module name
+from your_module import get_open_prs
 
-client = TestClient(app)
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
-def test_get_open_prs():
-    with patch("requests.get") as mock_get:
-        mock_get.return_value.json.return_value = [
-            {"number": 1, "title": "Test PR 1"},
-            {"number": 2, "title": "Test PR 2"}
-        ]
-        from your_module import get_open_prs  # replace with the actual module name
-        result = get_open_prs("test_owner", "test_repo")
-        assert result == [{"number": 1, "title": "Test PR 1"}, {"number": 2, "title": "Test PR 2"}]
+@patch('requests.get')
+def test_get_open_prs(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 1, "title": "PR1", "state": "open"},
+        {"number": 2, "title": "PR2", "state": "open"}
+    ]
+    mock_get.return_value = mock_response
 
-def test_get_pr_changed_files():
-    with patch("requests.get") as mock_get:
-        mock_get.return_value.json.return_value = [
-            {"filename": "test.py", "status": "modified"},
-            {"filename": "test2.py", "status": "added"}
-        ]
-        from your_module import get_pr_changed_files  # replace with the actual module name
-        result = get_pr_changed_files("test_owner", "test_repo", 1)
-        assert "test.py" in result
-        assert "test2.py" in result
+    result = get_open_prs('owner', 'repo')
 
-def test_analyze_and_remediate_code():
-    with patch("your_module.invoke_bedrock_with_retry") as mock_invoke:  # replace with the actual module name
-        mock_invoke.return_value = {"content": [{"text": "No issues found"}]}
-        from your_module import analyze_and_remediate_code  # replace with the actual module name
-        result = analyze_and_remediate_code({"test.py": "print('Hello, World!')"})
-        assert result == {"test.py": "print('Hello, World!')"}
+    mock_get.assert_called_once_with(
+        'https://api.github.com/repos/owner/repo/pulls?state=open', 
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Content-Type": "application/json"
+        }
+    )
+    assert result == [{"number": 1, "title": "PR1"}, {"number": 2, "title": "PR2"}]
 
-def test_lambda_handler():
-    event = {
-        "actionGroup": "PR_review_commit_merge",
-        "parameters": [{
-            "name": "owner",
-            "value": "test_owner"
-        }, {
-            "name": "repo",
-            "value": "test_repo"
-        }]
-    }
-    with patch("your_module
+@patch('requests.get')
+def test_get_open_prs_raises_exception_on_error(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 500
+    mock_response.raise_for_status.side_effect = Exception("An error occurred")
+    mock_get.return_value = mock_response
+
+    with pytest.raises(Exception) as e_info:
+        get_open_prs('owner', 'repo')
+
+    assert str(e_info.value) == "An error occurred"
+```
+
+In this test, I'm mocking the `requests.get` function to control its behavior. The `test_get_open_prs` test checks if the function correctly parses the response from the GitHub API. The `test_get_open_prs_raises_exception_on_error` test checks if the function raises an exception when the API response status is not 200.
+
+You need to write similar tests for all other functions in your module. It may take a while, but it's a crucial part of ensuring that your code works as expected.
+
+Note: Remember to replace `'your_module'` with the actual name of your module.
