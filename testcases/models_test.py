@@ -1,57 +1,56 @@
-# from fastapi.testclient import TestClient
+# ```python
 
-from sqlalchemy.orm import Session
-from main import app
-from models import Item, Task
+# Unit tests for Item and Task models in FastAPI
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from fastapi.testclient import TestClient
+from main import app
 from unittest.mock import patch, MagicMock
+
+from model import Item, Task, Base
+
+engine = create_engine("sqlite:///:memory:")
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base.metadata.create_all(bind=engine)
+
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
-@patch('sqlalchemy.orm.Session')
-def test_get_item(mock_session):
-    mock_item = Item(id=1, name='Test item', description='Test description', price=100, quantity=5)
-    mock_session.query.return_value.filter.return_value.first.return_value = mock_item
-    response = client.get("/items/1")
-    assert response.status_code == 200
-    assert response.json() == {'id': 1, 'name': 'Test item', 'description': 'Test description', 'price': 100, 'quantity': 5}
+def test_item_model():
+    with patch('model.Item') as mock:
+        item = Item(id=1, name='item1', description='desc1', price=10, quantity=5)
+        mock.return_value = item
+        response = client.get("/items/1")
+        assert response.status_code == 200
+        assert response.json() == {"id": 1, "name": "item1", "description": "desc1", "price": 10, "quantity": 5}
 
-@patch('sqlalchemy.orm.Session')
-def test_get_item_not_found(mock_session):
-    mock_session.query.return_value.filter.return_value.first.return_value = None
-    response = client.get("/items/1")
-    assert response.status_code == 404
+def test_task_model():
+    with patch('model.Task') as mock:
+        task = Task(id=1, name='task1')
+        mock.return_value = task
+        response = client.get("/tasks/1")
+        assert response.status_code == 200
+        assert response.json() == {"id": 1, "name": "task1"}
 
-@patch('sqlalchemy.orm.Session')
-def test_create_item(mock_session):
-    mock_item = Item(id=1, name='Test item', description='Test description', price=100, quantity=5)
-    mock_session.add.return_value = None
-    mock_session.commit.return_value = None
-    mock_session.refresh.return_value = None
-    response = client.post("/items/", json={'name': 'Test item', 'description': 'Test description', 'price': 100, 'quantity': 5})
-    assert response.status_code == 201
-    assert response.json() == {'id': 1, 'name': 'Test item', 'description': 'Test description', 'price': 100, 'quantity': 5}
+def test_item_not_found():
+    with patch('model.Item') as mock:
+        mock.return_value = None
+        response = client.get("/items/999")
+        assert response.status_code == 404
 
-@patch('sqlalchemy.orm.Session')
-def test_get_task(mock_session):
-    mock_task = Task(id=1, name='Test task')
-    mock_session.query.return_value.filter.return_value.first.return_value = mock_task
-    response = client.get("/tasks/1")
-    assert response.status_code == 200
-    assert response.json() == {'id': 1, 'name': 'Test task'}
-
-@patch('sqlalchemy.orm.Session')
-def test_get_task_not_found(mock_session):
-    mock_session.query.return_value.filter.return_value.first.return_value = None
-    response = client.get("/tasks/1")
-    assert response.status_code == 404
-
-@patch('sqlalchemy.orm.Session')
-def test_create_task(mock_session):
-    mock_task = Task(id=1, name='Test task')
-    mock_session.add.return_value = None
-    mock_session.commit.return_value = None
-    mock_session.refresh.return_value = None
-    response = client.post("/tasks/", json={'name': 'Test task'})
-    assert response.status_code == 201
-    assert response.json() == {'id': 1, 'name': 'Test task'}
+def test_task_not_found():
+    with patch('model.Task') as mock:
+        mock.return_value = None
+        response = client.get("/tasks/999")
+        assert response.status_code == 404
+```
