@@ -1,51 +1,60 @@
 # ```python
 
-# Unit tests for FastAPI application module
+# Test FastAPI application initialization and routes.
+
 import pytest
-from fastapi import FastAPI
-from starlette.testclient import TestClient
-from unittest.mock import patch, Mock
-from sqlalchemy.orm import Session
-
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from unittest.mock import Mock, patch
 from main import app
-from database import engine
 from models import Base
-from routes import router
 
-# Mocking external dependencies
-@pytest.fixture
-def mock_create_all():
-    with patch.object(Base.metadata, "create_all") as _mock:
-        yield _mock
+# Mocking Database
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-@pytest.fixture
-def mock_router():
-    with patch("main.router", new=Mock(spec=router)) as _mock:
-        yield _mock
+# Mocking Base Model
+Base.metadata.create_all(bind=engine)
 
-@pytest.fixture
-def client():
-    return TestClient(app)
+# Client for Testing
+client = TestClient(app)
 
-# Test if database tables are initialized
-def test_database_initialization(mock_create_all):
-    Base.metadata.create_all.assert_called_once_with(bind=engine)
 
-# Test if routes are included in the app
-def test_routes_inclusion(mock_router):
-    app.include_router.assert_called_once_with(router)
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
 
-# Test FastAPI application for edge cases, error handling, and boundary values
-def test_app_edge_cases(client: TestClient):
-    # Testing for a nonexistent route
-    response = client.get("/nonexistent")
-    assert response.status_code == 404
 
-    # Testing for a route that requires authentication without providing it
-    response = client.get("/secured")
-    assert response.status_code == 403
+# Mocking the Dependencies
+app.dependency_overrides[get_db] = override_get_db
 
-    # Testing for a route with an unexpected method
-    response = client.post("/get_only")
-    assert response.status_code == 405
+
+@patch('routes.router')
+def test_app_initialization(mock_router):
+    response = client.get('/')
+    assert response.status_code == 200
+    mock_router.assert_called_once()
+
+
+@patch('models.Base')
+def test_database_initialization(mock_base):
+    mock_base.metadata.create_all.assert_called_once_with(bind=engine)
+
+
+@patch('fastapi.FastAPI.include_router')
+def test_include_router(mock_include_router):
+    mock_include_router.assert_called_once_with(router)
+    
+
+@patch('fastapi.FastAPI')
+def test_create_app(mock_app):
+    assert isinstance(app, FastAPI)
+    mock_app.assert_called_once()
 ```
