@@ -1,56 +1,60 @@
 # ```python
 
-# Unit tests for the Item and Task models in the FastAPI application.
+# Testing Item and Task models in FastAPI
+
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from main import Base, Item, Task
+from sqlalchemy.orm import sessionmaker, Session
+from fastapi.testclient import TestClient
+from app.models import Item, Task
+from app.main import app, get_db
 
-# Mocking database connection
-engine = create_engine("sqlite:///:memory:")
+# Mocking database for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base.metadata.create_all(bind=engine)
 
-def test_item_model():
-    # Mocking a SessionLocal
-    with TestingSessionLocal() as db:
-        # Testing normal case
-        test_item = Item(id=1, name="Test Item", description="A test item", price=100, quantity=5)
-        db.add(test_item)
-        db.commit()
-        db.refresh(test_item)
-        assert test_item.id == 1
-        assert test_item.name == "Test Item"
-        assert test_item.description == "A test item"
-        assert test_item.price == 100
-        assert test_item.quantity == 5
+# Override dependencies for testing
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
 
-        # Testing edge case with null values
-        try:
-            test_item2 = Item(id=2, name=None, description=None, price=None, quantity=None)
-            db.add(test_item2)
-            db.commit()
-            db.refresh(test_item2)
-        except Exception as e:
-            assert isinstance(e, TypeError)
+app.dependency_overrides[get_db] = override_get_db
 
-def test_task_model():
-    # Mocking a SessionLocal
-    with TestingSessionLocal() as db:
-        # Testing normal case
-        test_task = Task(id=1, name="Test Task")
-        db.add(test_task)
-        db.commit()
-        db.refresh(test_task)
-        assert test_task.id == 1
-        assert test_task.name == "Test Task"
+client = TestClient(app)
 
-        # Testing edge case with null values
-        try:
-            test_task2 = Task(id=2, name=None)
-            db.add(test_task2)
-            db.commit()
-            db.refresh(test_task2)
-        except Exception as e:
-            assert isinstance(e, TypeError)
+# Mock Item and Task for testing
+@pytest.fixture
+def test_item():
+    return Item(id=1, name="Test Item", description="This is a test item", price=10, quantity=5)
+
+@pytest.fixture
+def test_task():
+    return Task(id=1, name="Test Task")
+
+# Test Item model
+def test_create_item(test_item):
+    response = client.post("/items/", json=test_item.dict())
+    assert response.status_code == 200
+    assert response.json() == {"name": "Test Item", "description": "This is a test item", "price": 10, "quantity": 5}
+
+# Test Task model
+def test_create_task(test_task):
+    response = client.post("/tasks/", json=test_task.dict())
+    assert response.status_code == 200
+    assert response.json() == {"name": "Test Task"}
+
+# Test edge cases
+def test_create_item_no_name(test_item):
+    test_item.name = None
+    response = client.post("/items/", json=test_item.dict())
+    assert response.status_code == 422
+
+def test_create_task_no_name(test_task):
+    test_task.name = None
+    response = client.post("/tasks/", json=test_task.dict())
+    assert response.status_code == 422
 ```
