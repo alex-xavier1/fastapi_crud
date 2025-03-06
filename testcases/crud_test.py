@@ -1,104 +1,73 @@
 # ```python
 
 import pytest
-from unittest.mock import Mock, patch
 from sqlalchemy.orm import Session
+from unittest.mock import MagicMock, patch
+from fastapi import HTTPException
 from models import Item
 from schemas import ItemCreate
-from main import get_items, get_item, create_item, update_item, delete_item
+import crud
 
-def test_get_items():
-    db = Mock(spec=Session)
-    db.query.return_value.all.return_value = [Item(id=1, name="Item 1")]
+# Test file for CRUD operations on Item model
 
-    result = get_items(db)
+@pytest.fixture
+def fake_db():
+    return MagicMock(spec=Session)
 
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.all.assert_called_once()
-    assert result == [Item(id=1, name="Item 1")]
+@pytest.fixture
+def fake_item():
+    return Item(id=1, name='test_item', price=100)
 
+@pytest.fixture
+def fake_item_create():
+    return ItemCreate(name='test_item', price=100)
 
-def test_get_item():
-    db = Mock(spec=Session)
-    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
+def test_get_items(fake_db):
+    crud.get_items(fake_db)
+    fake_db.query.assert_called_with(Item)
+    fake_db.query().all.assert_called_once()
 
-    result = get_item(db, 1)
+def test_get_item(fake_db, fake_item):
+    fake_db.query().filter().first.return_value = fake_item
+    result = crud.get_item(fake_db, 1)
+    fake_db.query.assert_called_with(Item)
+    fake_db.query().filter.assert_called_once()
+    assert result == fake_item
 
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    assert result == Item(id=1, name="Item 1")
+def test_get_item_not_found(fake_db):
+    fake_db.query().filter().first.return_value = None
+    with pytest.raises(HTTPException):
+        crud.get_item(fake_db, 99)
 
+def test_create_item(fake_db, fake_item, fake_item_create):
+    fake_db.query().filter().first.return_value = fake_item
+    result = crud.create_item(fake_db, fake_item_create)
+    fake_db.add.assert_called_once_with(fake_item)
+    fake_db.commit.assert_called_once()
+    fake_db.refresh.assert_called_once_with(fake_item)
+    assert result == fake_item
 
-def test_get_item_not_found():
-    db = Mock(spec=Session)
-    db.query.return_value.filter.return_value.first.return_value = None
+def test_update_item(fake_db, fake_item, fake_item_create):
+    fake_db.query().filter().first.return_value = fake_item
+    result = crud.update_item(fake_db, 1, fake_item_create)
+    fake_db.commit.assert_called_once()
+    fake_db.refresh.assert_called_once_with(fake_item)
+    assert result == fake_item
 
-    result = get_item(db, 1)
+def test_update_item_not_found(fake_db, fake_item_create):
+    fake_db.query().filter().first.return_value = None
+    with pytest.raises(HTTPException):
+        crud.update_item(fake_db, 99, fake_item_create)
 
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    assert result is None
+def test_delete_item(fake_db, fake_item):
+    fake_db.query().filter().first.return_value = fake_item
+    result = crud.delete_item(fake_db, 1)
+    fake_db.delete.assert_called_once_with(fake_item)
+    fake_db.commit.assert_called_once()
+    assert result == fake_item
 
-
-def test_create_item():
-    db = Mock(spec=Session)
-    item = ItemCreate(name="New item")
-
-    with patch('models.Item', return_value=Item(id=1, name="New item")) as mock_item:
-        result = create_item(db, item)
-
-    db.add.assert_called_once_with(mock_item.return_value)
-    db.commit.assert_called_once()
-    db.refresh.assert_called_once_with(mock_item.return_value)
-    assert result == mock_item.return_value
-
-
-def test_update_item():
-    db = Mock(spec=Session)
-    item = ItemCreate(name="Updated item")
-    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
-
-    result = update_item(db, 1, item)
-
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    db.commit.assert_called_once()
-    db.refresh.assert_called_once_with(db.query.return_value.filter.return_value.first.return_value)
-    assert result == db.query.return_value.filter.return_value.first.return_value
-
-
-def test_update_item_not_found():
-    db = Mock(spec=Session)
-    item = ItemCreate(name="Updated item")
-    db.query.return_value.filter.return_value.first.return_value = None
-
-    result = update_item(db, 1, item)
-
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    assert result is None
-
-
-def test_delete_item():
-    db = Mock(spec=Session)
-    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
-
-    result = delete_item(db, 1)
-
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    db.delete.assert_called_once_with(db.query.return_value.filter.return_value.first.return_value)
-    db.commit.assert_called_once()
-    assert result == db.query.return_value.filter.return_value.first.return_value
-
-
-def test_delete_item_not_found():
-    db = Mock(spec=Session)
-    db.query.return_value.filter.return_value.first.return_value = None
-
-    result = delete_item(db, 1)
-
-    db.query.assert_called_once_with(Item)
-    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
-    assert result is None
+def test_delete_item_not_found(fake_db):
+    fake_db.query().filter().first.return_value = None
+    with pytest.raises(HTTPException):
+        crud.delete_item(fake_db, 99)
 ```
