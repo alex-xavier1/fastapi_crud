@@ -1,64 +1,59 @@
-# Here's an example of how you could write unit tests for this application. We are using pytest and httpx for testing FastAPI application. We are also using unittest.mock to mock external dependencies.
+# Here's an example of a comprehensive unit test for the above module using pytest and httpx:
 
 
 ```python
-import pytest
-from httpx import AsyncClient
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
-from sqlalchemy.orm import Session
 from main import app
-from models import Base
-from database import SessionLocal, engine
+import pytest
 
-@pytest.fixture
-def test_app():
-    return app
+client = TestClient(app)
 
-@pytest.fixture
-def test_db():
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    yield db
-    db.close()
-    Base.metadata.drop_all(bind=engine)
+@patch('main.Base')
+@patch('main.engine')
+def test_database_initialization(mock_engine, mock_base):
+    from main import app  # reload to trigger database initialization
+    mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
 
-@pytest.mark.asyncio
-@patch('routes.router')
-async def test_app_initialization(mock_router, test_app, test_db):
-    with patch.object(FastAPI, 'include_router') as mock_include_router:
-        test_app.include_router(mock_router)
-        mock_include_router.assert_called_once_with(mock_router)
+@patch('main.router')
+def test_router_inclusion(mock_router):
+    from main import app  # reload to trigger router inclusion
+    app.include_router.assert_called_once_with(mock_router)
 
-@pytest.mark.asyncio
-@patch('routes.router')
-async def test_get_routes(mock_router, test_app):
-    mock_router.get_routes.return_value = ['route1', 'route2']
-    async with AsyncClient(app=test_app, base_url="http://test") as ac:
-        response = await ac.get("/routes")
+@patch('main.router')
+def test_router_response(mock_router):
+    mock_router.get.return_value = {"message": "Success"}
+
+    response = client.get("/")
+
     assert response.status_code == 200
-    assert response.json() == ['route1', 'route2']
+    assert response.json() == {"message": "Success"}
 
-@pytest.mark.asyncio
-@patch('routes.router')
-async def test_route_error_handling(mock_router, test_app):
-    mock_router.get_routes.side_effect = Exception('Test exception')
-    async with AsyncClient(app=test_app, base_url="http://test") as ac:
-        response = await ac.get("/routes")
-    assert response.status_code == 500
-    assert response.json() == {'detail': 'Test exception'}
+@pytest.mark.parametrize("status_code", [200, 400, 404, 500])
+def test_status_codes(status_code):
+    with patch('main.router.get', return_value=MagicMock(status_code=status_code)):
+        response = client.get("/")
 
-@pytest.mark.asyncio
-@patch('routes.router')
-async def test_invalid_route(mock_router, test_app):
-    async with AsyncClient(app=test_app, base_url="http://test") as ac:
-        response = await ac.get("/invalid_route")
-    assert response.status_code == 404
+        assert response.status_code == status_code
+
+def test_error_handling():
+    with patch('main.router.get', side_effect=Exception("Random error")):
+        response = client.get("/")
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Internal Server Error"}
+
+def test_edge_cases():
+    # TODO: Add your edge case testing logic here
+    pass
 ```
 
-Here we are testing:
+In this test:
 
-- The `FastAPI.include_router` method is called with the correct arguments.
-- The `get_routes` method returns the correct response.
-- An error is correctly handled and returns a 500 status code.
-- A request to an invalid route returns a 404 status code
+- `test_database_initialization` checks if the database tables are correctly initialized.
+- `test_router_inclusion` ensures the router is included in the FastAPI app.
+- `test_router_response` tests if the router behaves as expected.
+- `test_status_codes` checks if the application correctly handles various HTTP status codes.
+- `test_error_handling` makes sure the application can handle unexpected errors gracefully.
+- `test_edge_cases` is a placeholder for tests involving edge cases and boundary values.
