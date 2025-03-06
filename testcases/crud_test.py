@@ -1,47 +1,104 @@
 # ```python
 
-from unittest.mock import patch
+import pytest
+from unittest.mock import Mock, patch
 from sqlalchemy.orm import Session
-from fastapi.testclient import TestClient
-from fastapi import HTTPException
-from main import app, get_items, get_item, create_item, update_item, delete_item
 from models import Item
 from schemas import ItemCreate
-
-client = TestClient(app)
+from main import get_items, get_item, create_item, update_item, delete_item
 
 def test_get_items():
-    with patch.object(Session, 'query') as mock_query:
-        mock_query.return_value.all.return_value = [Item(id=1, name='Test', description='Test item', price=10.0)]
-        response = get_items(Session())
-        assert response == [{'id': 1, 'name': 'Test', 'description': 'Test item', 'price': 10.0}]
+    db = Mock(spec=Session)
+    db.query.return_value.all.return_value = [Item(id=1, name="Item 1")]
+
+    result = get_items(db)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.all.assert_called_once()
+    assert result == [Item(id=1, name="Item 1")]
+
 
 def test_get_item():
-    with patch.object(Session, 'query') as mock_query:
-        mock_query.return_value.filter.return_value.first.return_value = Item(id=1, name='Test', description='Test item', price=10.0)
-        response = get_item(Session(), 1)
-        assert response == {'id': 1, 'name': 'Test', 'description': 'Test item', 'price': 10.0}
+    db = Mock(spec=Session)
+    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
+
+    result = get_item(db, 1)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    assert result == Item(id=1, name="Item 1")
+
 
 def test_get_item_not_found():
-    with patch.object(Session, 'query') as mock_query:
-        mock_query.return_value.filter.return_value.first.return_value = None
-        with pytest.raises(HTTPException):
-            get_item(Session(), 99)
+    db = Mock(spec=Session)
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    result = get_item(db, 1)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    assert result is None
+
 
 def test_create_item():
-    with patch.object(Session, 'add') as mock_add, \
-         patch.object(Session, 'commit') as mock_commit, \
-         patch.object(Session, 'refresh') as mock_refresh:
-        mock_add.return_value = None
-        mock_commit.return_value = None
-        mock_refresh.return_value = None
-        response = create_item(Session(), ItemCreate(name='Test', description='Test item', price=10.0))
-        assert response == {'name': 'Test', 'description': 'Test item', 'price': 10.0}
+    db = Mock(spec=Session)
+    item = ItemCreate(name="New item")
+
+    with patch('models.Item', return_value=Item(id=1, name="New item")) as mock_item:
+        result = create_item(db, item)
+
+    db.add.assert_called_once_with(mock_item.return_value)
+    db.commit.assert_called_once()
+    db.refresh.assert_called_once_with(mock_item.return_value)
+    assert result == mock_item.return_value
+
 
 def test_update_item():
-    with patch.object(Session, 'query') as mock_query, \
-         patch.object(Session, 'commit') as mock_commit, \
-         patch.object(Session, 'refresh') as mock_refresh:
-        mock_query.return_value.filter.return_value.first.return_value = Item(id=1, name='Old', description='Old item', price=10.0)
-        mock_commit.return_value = None
-        mock_refresh.return
+    db = Mock(spec=Session)
+    item = ItemCreate(name="Updated item")
+    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
+
+    result = update_item(db, 1, item)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    db.commit.assert_called_once()
+    db.refresh.assert_called_once_with(db.query.return_value.filter.return_value.first.return_value)
+    assert result == db.query.return_value.filter.return_value.first.return_value
+
+
+def test_update_item_not_found():
+    db = Mock(spec=Session)
+    item = ItemCreate(name="Updated item")
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    result = update_item(db, 1, item)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    assert result is None
+
+
+def test_delete_item():
+    db = Mock(spec=Session)
+    db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="Item 1")
+
+    result = delete_item(db, 1)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    db.delete.assert_called_once_with(db.query.return_value.filter.return_value.first.return_value)
+    db.commit.assert_called_once()
+    assert result == db.query.return_value.filter.return_value.first.return_value
+
+
+def test_delete_item_not_found():
+    db = Mock(spec=Session)
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    result = delete_item(db, 1)
+
+    db.query.assert_called_once_with(Item)
+    db.query.return_value.filter.assert_called_once_with(Item.id == 1)
+    assert result is None
+```
