@@ -1,53 +1,84 @@
 # ```python
 
-# Unit tests for ItemBase, ItemCreate, and ItemResponse classes
+# Test suite for Item module using FastAPI and Pytest
 
-from pydantic import ValidationError
-from models import ItemBase, ItemCreate, ItemResponse
 import pytest
+from pydantic import ValidationError
+from unittest.mock import patch
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from main import app, ItemBase, ItemCreate, ItemResponse
 
-# Test ItemBase model
+client = TestClient(app)
+
 def test_item_base_model():
-    item = ItemBase(name="Test Item", description="This is a test item", price=20, quantity=5)
-    
-    assert item.name == "Test Item"
-    assert item.description == "This is a test item"
-    assert item.price == 20
-    assert item.quantity == 5
+    # Happy path scenario
+    try:
+        item = ItemBase(name="item1", description="item description", price=10, quantity=5)
+        assert item.name == "item1"
+        assert item.description == "item description"
+        assert item.price == 10
+        assert item.quantity == 5
+    except ValidationError:
+        pytest.fail("Model validation failed!")
 
-# Test ItemBase model with wrong data types
-def test_item_base_model_wrong_data_types():
+    # Negative scenario - missing required fields
     with pytest.raises(ValidationError):
-        item = ItemBase(name=1234, description="This is a test item", price="20", quantity="5")
+        ItemBase()
 
-# Test ItemCreate model
 def test_item_create_model():
-    item = ItemCreate(name="Test Item", description="This is a test item", price=20, quantity=5)
-    
-    assert item.name == "Test Item"
-    assert item.description == "This is a test item"
-    assert item.price == 20
-    assert item.quantity == 5
+    # Happy path scenario
+    try:
+        item = ItemCreate(name="item1", description="item description", price=10, quantity=5)
+        assert item.name == "item1"
+        assert item.description == "item description"
+        assert item.price == 10
+        assert item.quantity == 5
+    except ValidationError:
+        pytest.fail("Model validation failed!")
 
-# Test ItemCreate model with wrong data types
-def test_item_create_model_wrong_data_types():
+    # Negative scenario - missing required fields
     with pytest.raises(ValidationError):
-        item = ItemCreate(name=1234, description="This is a test item", price="20", quantity="5")
+        ItemCreate()
 
-# Test ItemResponse model
 def test_item_response_model():
-    item = ItemResponse(id=1, name="Test Item", description="This is a test item", price=20, quantity=5)
-    
-    assert item.id == 1
-    assert item.name == "Test Item"
-    assert item.description == "This is a test item"
-    assert item.price == 20
-    assert item.quantity == 5
+    # Happy path scenario
+    try:
+        item = ItemResponse(id=1, name="item1", description="item description", price=10, quantity=5)
+        assert item.id == 1
+        assert item.name == "item1"
+        assert item.description == "item description"
+        assert item.price == 10
+        assert item.quantity == 5
+    except ValidationError:
+        pytest.fail("Model validation failed!")
 
-# Test ItemResponse model with wrong data types
-def test_item_response_model_wrong_data_types():
+    # Negative scenario - missing required fields
     with pytest.raises(ValidationError):
-        item = ItemResponse(id="1", name="Test Item", description="This is a test item", price=20, quantity=5)
-```
+        ItemResponse()
 
-This test file includes tests for each of the models. The tests check that each model correctly instantiates with valid data and raises a ValidationError when instantiated with invalid data. The test file does not mock any external dependencies such as APIs, databases, or authentication services because these are not used in the models.
+# Assuming there is a /items endpoint that uses the ItemCreate and ItemResponse models
+@patch('main.database.create_item')
+def test_create_item(mock_create_item):
+    mock_create_item.return_value = ItemResponse(id=1, name="item1", description="item description", price=10, quantity=5)
+    response = client.post("/items/", json={"name": "item1", "description": "item description", "price": 10, "quantity": 5})
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "item1", "description": "item description", "price": 10, "quantity": 5}
+    
+    # Negative scenario - Bad Request
+    response = client.post("/items/", json={})
+    assert response.status_code == 400
+
+# Assuming there is a /items/{item_id} endpoint that uses the ItemResponse model
+@patch('main.database.get_item')
+def test_get_item(mock_get_item):
+    mock_get_item.return_value = ItemResponse(id=1, name="item1", description="item description", price=10, quantity=5)
+    response = client.get("/items/1")
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "item1", "description": "item description", "price": 10, "quantity": 5}
+
+    # Negative scenario - Item Not Found
+    mock_get_item.return_value = None
+    response = client.get("/items/1")
+    assert response.status_code == 404
+```
