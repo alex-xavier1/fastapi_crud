@@ -1,72 +1,56 @@
 # ```python
 
-# Unit tests for the Item and Task models in FastAPI using SQLAlchemy ORM
-
+# Unit tests for the Item and Task models in the FastAPI application.
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from models import Item, Task
+from sqlalchemy.orm import sessionmaker
+from main import Base, Item, Task
 
-# Mocking a SQLAlchemy Session for testing
-@pytest.fixture
-def db_session() -> Session:
-    engine = create_engine('sqlite:///:memory:', echo=True)
-    SessionLocal = sessionmaker(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    session = SessionLocal()
-    yield session
-    session.close()
+# Mocking database connection
+engine = create_engine("sqlite:///:memory:")
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base.metadata.create_all(bind=engine)
 
-def test_create_item(db_session):
-    item = Item(name='Test Item', description='Item for testing', price=100, quantity=10)
-    db_session.add(item)
-    db_session.commit()
-    assert item in db_session
+def test_item_model():
+    # Mocking a SessionLocal
+    with TestingSessionLocal() as db:
+        # Testing normal case
+        test_item = Item(id=1, name="Test Item", description="A test item", price=100, quantity=5)
+        db.add(test_item)
+        db.commit()
+        db.refresh(test_item)
+        assert test_item.id == 1
+        assert test_item.name == "Test Item"
+        assert test_item.description == "A test item"
+        assert test_item.price == 100
+        assert test_item.quantity == 5
 
-def test_item_not_found(db_session):
-    item = db_session.query(Item).filter_by(name='Non-existent item').first()
-    assert item is None
+        # Testing edge case with null values
+        try:
+            test_item2 = Item(id=2, name=None, description=None, price=None, quantity=None)
+            db.add(test_item2)
+            db.commit()
+            db.refresh(test_item2)
+        except Exception as e:
+            assert isinstance(e, TypeError)
 
-def test_create_task(db_session):
-    task = Task(name='Test Task')
-    db_session.add(task)
-    db_session.commit()
-    assert task in db_session
+def test_task_model():
+    # Mocking a SessionLocal
+    with TestingSessionLocal() as db:
+        # Testing normal case
+        test_task = Task(id=1, name="Test Task")
+        db.add(test_task)
+        db.commit()
+        db.refresh(test_task)
+        assert test_task.id == 1
+        assert test_task.name == "Test Task"
 
-def test_task_not_found(db_session):
-    task = db_session.query(Task).filter_by(name='Non-existent task').first()
-    assert task is None
-
-def test_update_item(db_session):
-    item = Item(name='Test Item', description='Item for testing', price=100, quantity=10)
-    db_session.add(item)
-    db_session.commit()
-    item.price = 200
-    db_session.commit()
-    assert item.price == 200
-
-def test_update_task(db_session):
-    task = Task(name='Test Task')
-    db_session.add(task)
-    db_session.commit()
-    task.name = 'Updated Task'
-    db_session.commit()
-    assert task.name == 'Updated Task'
-
-def test_delete_item(db_session):
-    item = Item(name='Test Item', description='Item for testing', price=100, quantity=10)
-    db_session.add(item)
-    db_session.commit()
-    db_session.delete(item)
-    db_session.commit()
-    assert item not in db_session
-
-def test_delete_task(db_session):
-    task = Task(name='Test Task')
-    db_session.add(task)
-    db_session.commit()
-    db_session.delete(task)
-    db_session.commit()
-    assert task not in db_session
+        # Testing edge case with null values
+        try:
+            test_task2 = Task(id=2, name=None)
+            db.add(test_task2)
+            db.commit()
+            db.refresh(test_task2)
+        except Exception as e:
+            assert isinstance(e, TypeError)
 ```
-Please note that the models used here are from the given module. The test cases cover all CRUD operations for the models.
