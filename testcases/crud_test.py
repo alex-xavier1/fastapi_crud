@@ -1,73 +1,48 @@
 # ```python
 
-import pytest
+# Unit tests for item CRUD operations
+
+from unittest import mock
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from unittest.mock import MagicMock, patch
-from fastapi import HTTPException
+from main import app, get_items, get_item, create_item, update_item, delete_item
 from models import Item
 from schemas import ItemCreate
-import crud
 
-# Test file for CRUD operations on Item model
+client = TestClient(app)
 
-@pytest.fixture
-def fake_db():
-    return MagicMock(spec=Session)
+def test_get_items():
+    with mock.patch.object(Session, 'query') as mock_query:
+        mock_query.return_value.all.return_value = [Item(id=1, name='test', description='test', price=10)]
+        response = client.get("/items/")
+        assert response.status_code == 200
+        assert response.json() == [{'id': 1, 'name': 'test', 'description': 'test', 'price': 10}]
 
-@pytest.fixture
-def fake_item():
-    return Item(id=1, name='test_item', price=100)
+def test_get_item():
+    with mock.patch.object(Session, 'query') as mock_query:
+        mock_query.return_value.filter.return_value.first.return_value = Item(id=1, name='test', description='test', price=10)
+        response = client.get("/items/1")
+        assert response.status_code == 200
+        assert response.json() == {'id': 1, 'name': 'test', 'description': 'test', 'price': 10}
 
-@pytest.fixture
-def fake_item_create():
-    return ItemCreate(name='test_item', price=100)
+def test_create_item():
+    with mock.patch.object(Session, 'add') as mock_add, mock.patch.object(Session, 'commit') as mock_commit, mock.patch.object(Session, 'refresh') as mock_refresh:
+        mock_item = ItemCreate(name='test', description='test', price=10)
+        response = client.post("/items/", json=mock_item.dict())
+        assert response.status_code == 200
+        assert response.json() == {'id': 1, 'name': 'test', 'description': 'test', 'price': 10}
 
-def test_get_items(fake_db):
-    crud.get_items(fake_db)
-    fake_db.query.assert_called_with(Item)
-    fake_db.query().all.assert_called_once()
+def test_update_item():
+    with mock.patch.object(Session, 'query') as mock_query, mock.patch.object(Session, 'commit') as mock_commit, mock.patch.object(Session, 'refresh') as mock_refresh:
+        mock_item = ItemCreate(name='updated_test', description='updated_test', price=20)
+        response = client.put("/items/1", json=mock_item.dict())
+        assert response.status_code == 200
+        assert response.json() == {'id': 1, 'name': 'updated_test', 'description': 'updated_test', 'price': 20}
 
-def test_get_item(fake_db, fake_item):
-    fake_db.query().filter().first.return_value = fake_item
-    result = crud.get_item(fake_db, 1)
-    fake_db.query.assert_called_with(Item)
-    fake_db.query().filter.assert_called_once()
-    assert result == fake_item
-
-def test_get_item_not_found(fake_db):
-    fake_db.query().filter().first.return_value = None
-    with pytest.raises(HTTPException):
-        crud.get_item(fake_db, 99)
-
-def test_create_item(fake_db, fake_item, fake_item_create):
-    fake_db.query().filter().first.return_value = fake_item
-    result = crud.create_item(fake_db, fake_item_create)
-    fake_db.add.assert_called_once_with(fake_item)
-    fake_db.commit.assert_called_once()
-    fake_db.refresh.assert_called_once_with(fake_item)
-    assert result == fake_item
-
-def test_update_item(fake_db, fake_item, fake_item_create):
-    fake_db.query().filter().first.return_value = fake_item
-    result = crud.update_item(fake_db, 1, fake_item_create)
-    fake_db.commit.assert_called_once()
-    fake_db.refresh.assert_called_once_with(fake_item)
-    assert result == fake_item
-
-def test_update_item_not_found(fake_db, fake_item_create):
-    fake_db.query().filter().first.return_value = None
-    with pytest.raises(HTTPException):
-        crud.update_item(fake_db, 99, fake_item_create)
-
-def test_delete_item(fake_db, fake_item):
-    fake_db.query().filter().first.return_value = fake_item
-    result = crud.delete_item(fake_db, 1)
-    fake_db.delete.assert_called_once_with(fake_item)
-    fake_db.commit.assert_called_once()
-    assert result == fake_item
-
-def test_delete_item_not_found(fake_db):
-    fake_db.query().filter().first.return_value = None
-    with pytest.raises(HTTPException):
-        crud.delete_item(fake_db, 99)
+def test_delete_item():
+    with mock.patch.object(Session, 'query') as mock_query, mock.patch.object(Session, 'delete') as mock_delete, mock.patch.object(Session, 'commit') as mock_commit:
+        response = client.delete("/items/1")
+        assert response.status_code == 200
+        assert response.json() == {'id': 1, 'name': 'test', 'description': 'test', 'price': 10}
 ```
+Note: These unit tests make use of the mock library to replace the ORM Session object methods with mock objects. Each mock object is set to return a specific value when called, which allows the tests to focus on the functionality of the route handlers without relying on an actual database. This approach can be extended to handle more complex scenarios, such as testing error handling code by having the mock objects raise exceptions.
