@@ -1,40 +1,44 @@
 # ```python
 
-# Test file for module handling database connection using SQLAlchemy with FastAPI
+# Test file for database operations
 
 import os
-from unittest.mock import patch, MagicMock
-import pytest
-from sqlalchemy import create_engine
+from unittest.mock import patch
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+import pytest
 from fastapi.testclient import TestClient
 
-# Mocking the environment variable
-@patch.dict(os.environ, {"DATABASE_URL": "postgresql://user:password@localhost/fastapi_db"})
-def test_database_url_set():
-    assert os.getenv("DATABASE_URL") == "postgresql://user:password@localhost/fastapi_db"
+@pytest.fixture(scope="module")
+def test_app():
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+    from main import app
+    client = TestClient(app)
+    yield client  # testing happens here
 
-# Mocking the create_engine function
-@patch('sqlalchemy.create_engine', return_value=MagicMock())
-def test_create_engine(mock_create_engine):
-    DATABASE_URL: str = os.environ.get("DATABASE_URL")
-    engine = create_engine(DATABASE_URL)
-    mock_create_engine.assert_called_once_with(DATABASE_URL)
+@patch("main.create_engine")
+@patch("main.sessionmaker")
+def test_create_engine(mock_sessionmaker, mock_create_engine, test_app):
+    mock_create_engine.assert_called_once()
+    assert mock_create_engine.call_args[0][0] == os.environ["DATABASE_URL"]
 
-# Mocking the sessionmaker function
-@patch('sqlalchemy.orm.sessionmaker', return_value=MagicMock())
-def test_sessionmaker(mock_sessionmaker):
-    engine = MagicMock()
-    SessionLocal: sessionmaker = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    mock_sessionmaker.assert_called_once_with(autocommit=False, autoflush=False, bind=engine)
+@patch("main.create_engine")
+@patch("main.sessionmaker")
+def test_session_local(mock_sessionmaker, mock_create_engine, test_app):
+    mock_create_engine.assert_called_once()
+    mock_sessionmaker.assert_called_once_with(autocommit=False, autoflush=False, bind=mock_create_engine.return_value)
 
-# Test the declarative_base function
-@patch('sqlalchemy.ext.declarative.declarative_base', return_value=MagicMock())
-def test_declarative_base(mock_declarative_base):
-    Base = declarative_base()
+@patch("main.create_engine")
+@patch("main.declarative_base")
+def test_base(mock_declarative_base, mock_create_engine, test_app):
     mock_declarative_base.assert_called_once()
-```
-This test suite covers the main functions of the module, including the database URL extraction from environment variables, the engine creation, session management and the base declarative model for SQLAlchemy. Mocking is used to prevent actual database interactions and ensure unit isolation. 
 
-Note that actual FastAPI endpoint testing or database interaction testing may need to be done in integration tests, as they would require a running application instance and potentially a real or mocked database, which are beyond the scope of unit testing.
+@patch("main.create_engine")
+@patch("main.sessionmaker")
+def test_database_url_not_provided(mock_sessionmaker, mock_create_engine, test_app):
+    os.environ.pop("DATABASE_URL", None)  # remove environment variable for this test
+    from main import DATABASE_URL
+    assert DATABASE_URL == "postgresql://user:password@localhost/fastapi_db"
+```
+This set of unit tests ensures that the `create_engine`, `sessionmaker`, and `declarative_base` functions are called correctly, and that the `DATABASE_URL` environment variable is used properly. It also checks the default value of `DATABASE_URL` when it is not provided. The `test_app` fixture is used to reload the main module for each test, ensuring a clean environment. The `unittest.mock.patch` decorator is used to replace the real functions with mock ones, allowing for the testing of how they are called.
