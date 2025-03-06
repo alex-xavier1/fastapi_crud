@@ -1,70 +1,44 @@
-# ```python
+# Here is a comprehensive unit test for the above module using pytest and unittest.mock. This test suite covers the main functions in the module and mocks external dependencies.
 
-import json
-from unittest.mock import patch, Mock
+
+```python
 import pytest
+import unittest.mock as mock
 from fastapi.testclient import TestClient
-from your_module import app  # replace 'your_module' with the name of your module
+from your_module import app, get_open_prs, get_pr_changed_files, analyze_and_remediate_code, create_new_branch, comment_on_pr, merge_remediated_branch, rollback_main_branch
 
 client = TestClient(app)
 
-def test_lambda_handler_success():
-    event = {
-        "actionGroup": "PR_review_commit_merge",
-        "parameters": [
-            {"name": "owner", "value": "testOwner"},
-            {"name": "repo", "value": "testRepo"}
-        ],
-        "messageVersion": "1.0"
-    }
+def test_get_open_prs():
+    with mock.patch('requests.get') as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = [{"number": 1, "title": "PR1"}]
+        result = get_open_prs("owner", "repo")
+        assert result == [{"number": 1, "title": "PR1"}]
 
-    # Mock responses
-    get_open_prs_response = [
-        {"number": 1, "title": "PR1"},
-        {"number": 2, "title": "PR2"}
-    ]
+def test_get_pr_changed_files():
+    with mock.patch('requests.get') as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = [{
+            "filename": "file.py",
+            "content": "print('Hello, World!')"
+        }]
+        result = get_pr_changed_files("owner", "repo", 1)
+        assert result == {"file.py": "print('Hello, World!')"}
 
-    get_pr_changed_files_response = {
-        "file1.py": "print('Hello, World!')",
-        "file2.py": "print('Another Python file')"
-    }
+def test_analyze_and_remediate_code():
+    with mock.patch('your_module.invoke_bedrock_with_retry') as mock_invoke:
+        mock_invoke.return_value = {"content": [{"text": "No issues detected."}]}
+        result = analyze_and_remediate_code({"file.py": "print('Hello, World!')"})
+        assert result == {"file.py": "print('Hello, World!')"}
 
-    analyze_and_remediate_code_response = {
-        "file1.py": "print('Hello, world!')",
-        "file2.py": "print('Remediated Python file')"
-    }
-
-    create_new_branch_response = "remediation-1"
-
-    with patch("your_module.get_open_prs", return_value=get_open_prs_response), \
-        patch("your_module.get_pr_changed_files", return_value=get_pr_changed_files_response), \
-        patch("your_module.analyze_and_remediate_code", return_value=analyze_and_remediate_code_response), \
-        patch("your_module.create_new_branch", return_value=create_new_branch_response), \
-        patch("your_module.merge_remediated_branch"), \
-        patch("your_module.comment_on_pr"):
-
-        response = client.post("/lambda_handler", json=event)
-        assert response.status_code == 200
-        assert response.json() == {
-            "response": {
-                "actionGroup": "PR_review_commit_merge",
-                "functionResponse": {
-                    "responseBody": {
-                        "TEXT": {
-                            "body": "remediation-1"
-                        }
-                    }
-                }
-            },
-            "messageVersion": "1.0"
-        }
-
-def test_lambda_handler_missing_parameters():
-    event = {
-        "actionGroup": "PR_review_commit_merge",
-        "parameters": [],
-        "messageVersion": "1.0"
-    }
-
-    with patch("your_module.get_open_prs"), \
-        patch
+def test_create_new_branch():
+    with mock.patch('requests.get') as mock_get, \
+         mock.patch('requests.post') as mock_post, \
+         mock.patch('requests.patch') as mock_patch:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"object": {"sha": "abc123"}}
+        mock_post.return_value.status_code = 201
+        mock_post.return_value.json.return_value = {"sha": "abc123"}
+        mock_patch.return_value.status_code = 200
+        result = create_new_branch("owner", "repo", "main", "new_branch", {"file.py": "print('Hello, World
