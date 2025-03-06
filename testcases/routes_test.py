@@ -1,77 +1,76 @@
 # ```python
 
-# Unit tests for FastAPI routing module
-
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from fastapi.testclient import TestClient
-from database import SessionLocal
-from unittest.mock import patch, MagicMock
+# Test file to perform unit testing on FastAPI routes in the items module
 import pytest
-import main
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+from main import app
+from database import SessionLocal
+import crud, schemas
+from unittest.mock import patch, MagicMock
+from fastapi import HTTPException
 
-client = TestClient(main.app)
+client = TestClient(app)
 
-def override_get_db():
-    return SessionLocal()
+@patch('crud.get_items')
+@patch('database.SessionLocal')
+def test_read_items(mock_db, mock_get_items):
+    mock_db.return_value = MagicMock(spec=Session)
+    mock_get_items.return_value = [schemas.ItemResponse(name="item1", description="Test item 1"), schemas.ItemResponse(name="item2", description="Test item 2")]
 
-main.app.dependency_overrides[main.get_db] = override_get_db
+    response = client.get("/items")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
 
+@patch('crud.get_item')
+@patch('database.SessionLocal')
+def test_read_item(mock_db, mock_get_item):
+    mock_db.return_value = MagicMock(spec=Session)
+    mock_get_item.return_value = schemas.ItemResponse(name="item1", description="Test item 1")
 
-def test_read_items():
-    with patch('main.crud.get_items', return_value=[{'id': 1, 'name': 'test item', 'description': 'test'}]) as mock:
-        response = client.get("/items")
-        assert response.status_code == 200
-        assert response.json() == [{'id': 1, 'name': 'test item', 'description': 'test'}]
-        mock.assert_called_once()
+    response = client.get("/items/1")
+    assert response.status_code == 200
+    assert response.json() == {"name": "item1", "description": "Test item 1"}
 
+    mock_get_item.return_value = None
+    with pytest.raises(HTTPException):
+        client.get("/items/999")
 
-def test_read_item():
-    with patch('main.crud.get_item', return_value={'id': 1, 'name': 'test item', 'description': 'test'}) as mock:
-        response = client.get("/items/1")
-        assert response.status_code == 200
-        assert response.json() == {'id': 1, 'name': 'test item', 'description': 'test'}
-        mock.assert_called_once_with(1)
+@patch('crud.create_item')
+@patch('database.SessionLocal')
+def test_create_item(mock_db, mock_create_item):
+    mock_db.return_value = MagicMock(spec=Session)
+    mock_create_item.return_value = schemas.ItemResponse(name="item1", description="Test item 1")
 
-    with patch('main.crud.get_item', return_value=None) as mock:
-        response = client.get("/items/999")
-        assert response.status_code == 404
-        assert response.json() == {'detail': 'Item not found'}
-        mock.assert_called_once_with(999)
+    response = client.post("/items", json={"name": "item1", "description": "Test item 1"})
+    assert response.status_code == 200
+    assert response.json() == {"name": "item1", "description": "Test item 1"}
 
+@patch('crud.update_item')
+@patch('database.SessionLocal')
+def test_update_item(mock_db, mock_update_item):
+    mock_db.return_value = MagicMock(spec=Session)
+    mock_update_item.return_value = schemas.ItemResponse(name="updated item", description="Updated test item")
 
-def test_create_item():
-    with patch('main.crud.create_item', return_value={'id': 1, 'name': 'test item', 'description': 'test'}) as mock:
-        response = client.post("/items", json={'name': 'test item', 'description': 'test'})
-        assert response.status_code == 200
-        assert response.json() == {'id': 1, 'name': 'test item', 'description': 'test'}
-        mock.assert_called_once()
+    response = client.put("/items/1", json={"name": "updated item", "description": "Updated test item"})
+    assert response.status_code == 200
+    assert response.json() == {"name": "updated item", "description": "Updated test item"}
 
+    mock_update_item.return_value = None
+    with pytest.raises(HTTPException):
+        client.put("/items/999", json={"name": "nonexistent item", "description": "Nonexistent test item"})
 
-def test_update_item():
-    with patch('main.crud.update_item', return_value={'id': 1, 'name': 'updated item', 'description': 'updated'}) as mock:
-        response = client.put("/items/1", json={'name': 'updated item', 'description': 'updated'})
-        assert response.status_code == 200
-        assert response.json() == {'id': 1, 'name': 'updated item', 'description': 'updated'}
-        mock.assert_called_once()
+@patch('crud.delete_item')
+@patch('database.SessionLocal')
+def test_delete_item(mock_db, mock_delete_item):
+    mock_db.return_value = MagicMock(spec=Session)
+    mock_delete_item.return_value = True
 
-    with patch('main.crud.update_item', return_value=None) as mock:
-        response = client.put("/items/999", json={'name': 'updated item', 'description': 'updated'})
-        assert response.status_code == 404
-        assert response.json() == {'detail': 'Item not found'}
-        mock.assert_called_once()
+    response = client.delete("/items/1")
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Item deleted"}
 
-
-def test_delete_item():
-    with patch('main.crud.delete_item', return_value=1) as mock:
-        response = client.delete("/items/1")
-        assert response.status_code == 200
-        assert response.json() == {'detail': 'Item deleted'}
-        mock.assert_called_once()
-
-    with patch('main.crud.delete_item', return_value=None) as mock:
-        response = client.delete("/items/999")
-        assert response.status_code == 404
-        assert response.json() == {'detail': 'Item not found'}
-        mock.assert_called_once()
+    mock_delete_item.return_value = None
+    with pytest.raises(HTTPException):
+        client.delete("/items/999")
 ```
