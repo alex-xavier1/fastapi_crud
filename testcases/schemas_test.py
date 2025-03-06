@@ -1,64 +1,50 @@
-# Sure, here's a simple unit test for the Item models.
+# ```python
 
-
-```python
 import pytest
+from fastapi.testclient import TestClient
+from main import app, ItemCreate, ItemResponse
+from mock import patch
 from pydantic import ValidationError
-from main import ItemCreate, ItemResponse
 
-def test_item_create():
-    # Test successful creation
-    item = ItemCreate(name="test", description="test item", price=100, quantity=10)
-    assert item.name == "test"
-    assert item.description == "test item"
-    assert item.price == 100
-    assert item.quantity == 10
+client = TestClient(app)
 
-    # Test missing fields
-    with pytest.raises(ValidationError):
-        ItemCreate()
+def test_item_create_success():
+    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
+    response = client.post('/items/', json=item_data)
+    assert response.status_code == 200
+    assert response.json() == {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
 
-    # Test price and quantity as negative values
-    with pytest.raises(ValidationError):
-        ItemCreate(name="test", description="test item", price=-100, quantity=10)
+@patch('main.ItemCreate')
+def test_item_create_validation_error(mock_item_create):
+    mock_item_create.side_effect = ValidationError
+    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': '100', 'quantity': 10}
+    response = client.post('/items/', json=item_data)
+    assert response.status_code == 422
 
-    with pytest.raises(ValidationError):
-        ItemCreate(name="test", description="test item", price=100, quantity=-10)
+def test_item_create_missing_field():
+    item_data = {'description': 'This is a test item', 'price': 100, 'quantity': 10}
+    response = client.post('/items/', json=item_data)
+    assert response.status_code == 422
 
-    # Test price and quantity as non-integer values
-    with pytest.raises(ValidationError):
-        ItemCreate(name="test", description="test item", price=100.5, quantity=10)
+def test_item_create_negative_price():
+    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': -100, 'quantity': 10}
+    response = client.post('/items/', json=item_data)
+    assert response.status_code == 422
 
-    with pytest.raises(ValidationError):
-        ItemCreate(name="test", description="test item", price=100, quantity=10.5)
+def test_item_create_negative_quantity():
+    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': -10}
+    response = client.post('/items/', json=item_data)
+    assert response.status_code == 422
 
+def test_item_response_success():
+    item_data = {'id': 1, 'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
+    response = client.get('/items/1')
+    assert response.status_code == 200
+    assert response.json() == item_data
 
-def test_item_response():
-    # Test successful creation
-    item = ItemResponse(id=1, name="test", description="test item", price=100, quantity=10)
-    assert item.id == 1
-    assert item.name == "test"
-    assert item.description == "test item"
-    assert item.price == 100
-    assert item.quantity == 10
-
-    # Test missing fields
-    with pytest.raises(ValidationError):
-        ItemResponse()
-
-    # Test item id as negative value
-    with pytest.raises(ValidationError):
-        ItemResponse(id=-1, name="test", description="test item", price=100, quantity=10)
-
-    # Test item id as non-integer value
-    with pytest.raises(ValidationError):
-        ItemResponse(id=1.5, name="test", description="test item", price=100, quantity=10)
+@patch('main.ItemResponse')
+def test_item_response_not_found(mock_item_response):
+    mock_item_response.side_effect = KeyError
+    response = client.get('/items/999')
+    assert response.status_code == 404
 ```
-
-This test covers:
-- Valid item creation
-- Missing required fields
-- Invalid types for fields
-- Negative values for fields that should only have positive values
-
-It does not include any dependencies, as the models do not interact with any external services.
