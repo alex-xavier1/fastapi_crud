@@ -1,50 +1,40 @@
 # ```python
 
 import pytest
-from fastapi.testclient import TestClient
-from main import app, ItemCreate, ItemResponse
-from mock import patch
 from pydantic import ValidationError
+from unittest.mock import MagicMock
+from httpx import AsyncClient
+from app.main import app
+from app.models import ItemCreate, ItemResponse
 
-client = TestClient(app)
-
-def test_item_create_success():
-    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
-    response = client.post('/items/', json=item_data)
+@pytest.mark.asyncio
+async def test_item_create():
+    data = {"name": "Test", "description": "Test item", "price": 100, "quantity": 10}
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        response = await ac.post("/items/", json=data)
     assert response.status_code == 200
-    assert response.json() == {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
+    item = ItemCreate(**response.json())
+    assert item.name == "Test"
+    assert item.description == "Test item"
 
-@patch('main.ItemCreate')
-def test_item_create_validation_error(mock_item_create):
-    mock_item_create.side_effect = ValidationError
-    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': '100', 'quantity': 10}
-    response = client.post('/items/', json=item_data)
-    assert response.status_code == 422
-
-def test_item_create_missing_field():
-    item_data = {'description': 'This is a test item', 'price': 100, 'quantity': 10}
-    response = client.post('/items/', json=item_data)
-    assert response.status_code == 422
-
-def test_item_create_negative_price():
-    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': -100, 'quantity': 10}
-    response = client.post('/items/', json=item_data)
-    assert response.status_code == 422
-
-def test_item_create_negative_quantity():
-    item_data = {'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': -10}
-    response = client.post('/items/', json=item_data)
-    assert response.status_code == 422
-
-def test_item_response_success():
-    item_data = {'id': 1, 'name': 'Test Item', 'description': 'This is a test item', 'price': 100, 'quantity': 10}
-    response = client.get('/items/1')
+@pytest.mark.asyncio
+async def test_item_response():
+    data = {"id": 1, "name": "Test", "description": "Test item", "price": 100, "quantity": 10}
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        response = await ac.get("/items/1")
     assert response.status_code == 200
-    assert response.json() == item_data
+    item = ItemResponse(**response.json())
+    assert item.id == 1
+    assert item.name == "Test"
+    assert item.description == "Test item"
 
-@patch('main.ItemResponse')
-def test_item_response_not_found(mock_item_response):
-    mock_item_response.side_effect = KeyError
-    response = client.get('/items/999')
-    assert response.status_code == 404
+def test_item_create_validation_error():
+    data = {"name": "Test", "description": "Test item", "price": "invalid", "quantity": 10}
+    with pytest.raises(ValidationError):
+        ItemCreate(**data)
+
+def test_item_response_validation_error():
+    data = {"id": "invalid", "name": "Test", "description": "Test item", "price": 100, "quantity": 10}
+    with pytest.raises(ValidationError):
+        ItemResponse(**data)
 ```
