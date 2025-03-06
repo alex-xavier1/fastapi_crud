@@ -1,58 +1,77 @@
 # ```python
 
-from fastapi.testclient import TestClient
+# Unit tests for FastAPI routing module
+
+from fastapi import Depends
 from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient
+from database import SessionLocal
 from unittest.mock import patch, MagicMock
-from main import app, get_db
-from crud import get_item, get_items, create_item, update_item, delete_item
-import schemas
+import pytest
+import main
 
-client = TestClient(app)
+client = TestClient(main.app)
 
-# Mock the get_db dependency
-app.dependency_overrides[get_db] = MagicMock()
+def override_get_db():
+    return SessionLocal()
+
+main.app.dependency_overrides[main.get_db] = override_get_db
+
 
 def test_read_items():
-    with patch.object(get_items, "return_value", [{"name": "item1", "description": "description1"}]):
+    with patch('main.crud.get_items', return_value=[{'id': 1, 'name': 'test item', 'description': 'test'}]) as mock:
         response = client.get("/items")
         assert response.status_code == 200
-        assert response.json() == [{"name": "item1", "description": "description1"}]
+        assert response.json() == [{'id': 1, 'name': 'test item', 'description': 'test'}]
+        mock.assert_called_once()
+
 
 def test_read_item():
-    with patch.object(get_item, "return_value", {"name": "item1", "description": "description1"}):
+    with patch('main.crud.get_item', return_value={'id': 1, 'name': 'test item', 'description': 'test'}) as mock:
         response = client.get("/items/1")
         assert response.status_code == 200
-        assert response.json() == {"name": "item1", "description": "description1"}
+        assert response.json() == {'id': 1, 'name': 'test item', 'description': 'test'}
+        mock.assert_called_once_with(1)
 
-    with patch.object(get_item, "return_value", None):
-        response = client.get("/items/99")
+    with patch('main.crud.get_item', return_value=None) as mock:
+        response = client.get("/items/999")
         assert response.status_code == 404
+        assert response.json() == {'detail': 'Item not found'}
+        mock.assert_called_once_with(999)
+
 
 def test_create_item():
-    test_item = schemas.ItemCreate(name="item1", description="description1")
-    with patch.object(create_item, "return_value", test_item):
-        response = client.post("/items", json={"name": "item1", "description": "description1"})
+    with patch('main.crud.create_item', return_value={'id': 1, 'name': 'test item', 'description': 'test'}) as mock:
+        response = client.post("/items", json={'name': 'test item', 'description': 'test'})
         assert response.status_code == 200
-        assert response.json() == {"name": "item1", "description": "description1"}
+        assert response.json() == {'id': 1, 'name': 'test item', 'description': 'test'}
+        mock.assert_called_once()
+
 
 def test_update_item():
-    test_item = schemas.ItemCreate(name="item1", description="description1")
-    with patch.object(update_item, "return_value", test_item):
-        response = client.put("/items/1", json={"name": "item1", "description": "description1"})
+    with patch('main.crud.update_item', return_value={'id': 1, 'name': 'updated item', 'description': 'updated'}) as mock:
+        response = client.put("/items/1", json={'name': 'updated item', 'description': 'updated'})
         assert response.status_code == 200
-        assert response.json() == {"name": "item1", "description": "description1"}
+        assert response.json() == {'id': 1, 'name': 'updated item', 'description': 'updated'}
+        mock.assert_called_once()
 
-    with patch.object(update_item, "return_value", None):
-        response = client.put("/items/99", json={"name": "item1", "description": "description1"})
+    with patch('main.crud.update_item', return_value=None) as mock:
+        response = client.put("/items/999", json={'name': 'updated item', 'description': 'updated'})
         assert response.status_code == 404
+        assert response.json() == {'detail': 'Item not found'}
+        mock.assert_called_once()
+
 
 def test_delete_item():
-    with patch.object(delete_item, "return_value", {"detail": "Item deleted"}):
+    with patch('main.crud.delete_item', return_value=1) as mock:
         response = client.delete("/items/1")
         assert response.status_code == 200
-        assert response.json() == {"detail": "Item deleted"}
+        assert response.json() == {'detail': 'Item deleted'}
+        mock.assert_called_once()
 
-    with patch.object(delete_item, "return_value", None):
-        response = client.delete("/items/99")
+    with patch('main.crud.delete_item', return_value=None) as mock:
+        response = client.delete("/items/999")
         assert response.status_code == 404
+        assert response.json() == {'detail': 'Item not found'}
+        mock.assert_called_once()
 ```
