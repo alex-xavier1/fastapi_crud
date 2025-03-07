@@ -1,77 +1,69 @@
 # Unit tests for lambda.py
 
-Here is a unit test for the given Flask module using pytest and unittest.mock. In this test, we are mocking the requests and boto3 client to simulate different responses from the GitHub and AWS Bedrock APIs and then testing the business logic of the function using these mocked responses.
-
 ```python
-# This file contains unit tests for the Flask module that integrates with the GitHub API and the AWS Bedrock API.
-# The tests cover different scenarios and edge cases, including handling of error responses and boundary values.
-# External APIs are mocked in order to isolate the business logic and ensure test stability.
+# This test suite verifies the functionality and correct operation of the module for automated PR remediation and merging.
 
-import pytest
-import mock
-from unittest.mock import patch
-from module import lambda_handler, get_open_prs, get_pr_changed_files, analyze_and_remediate_code, analyze_code, remediate_code, create_new_branch, comment_on_pr, rollback_main_branch, merge_remediated_branch, invoke_bedrock_with_retry
+import base64
+import json
+import os
+import unittest
+from unittest import mock
 
-def test_get_open_prs():
-    with patch('requests.get') as mocked_get:
-        mocked_get.return_value.status_code = 200
-        mocked_get.return_value.json.return_value = [{"number": 1, "title": "Test PR"}]
-        assert get_open_prs('owner', 'repo') == [{"number": 1, "title": "Test PR"}]
+import requests_mock
 
-def test_get_pr_changed_files():
-    with patch('requests.get') as mocked_get:
-        mocked_get.return_value.status_code = 200
-        mocked_get.return_value.json.return_value = [{"filename": "test.py"}]
-        mocked_get.return_value.text = "print('Hello, World!')"
-        assert get_pr_changed_files('owner', 'repo', 1) == {"test.py": "print('Hello, World!')"}
+from your_module import get_open_prs, get_pr_changed_files, analyze_and_remediate_code, create_new_branch, merge_remediated_branch, comment_on_pr, lambda_handler
 
-def test_analyze_and_remediate_code():
-    with patch('module.invoke_bedrock_with_retry') as mocked_invoke:
-        mocked_invoke.return_value = {"content": [{"text": "No issues detected"}]}
-        assert analyze_and_remediate_code({"test.py": "print('Hello, World!')"}) == {"test.py": "print('Hello, World!')"}
+class TestYourModule(unittest.TestCase):
+    @requests_mock.Mocker()
+    def test_get_open_prs(self, m):
+        m.get("https://api.github.com/repos/test_owner/test_repo/pulls?state=open", text='[{"number": 1, "title": "test PR"}]')
+        result = get_open_prs("test_owner", "test_repo")
+        self.assertEqual(result, [{"number": 1, "title": "test PR"}])
 
-def test_create_new_branch():
-    with patch('requests.get') as mocked_get:
-        with patch('requests.post') as mocked_post:
-            with patch('requests.patch') as mocked_patch:
-                mocked_get.return_value.status_code = 200
-                mocked_get.return_value.json.return_value = {"object": {"sha": "1234"}}
-                mocked_post.return_value.status_code = 201
-                mocked_post.return_value.json.return_value = {"sha": "1234"}
-                mocked_patch.return_value.status_code = 200
-                assert create_new_branch('owner', 'repo', 'main', 'remediation', {"test.py": "print('Hello, World!')"}) == 'remediation-1'
+    @requests_mock.Mocker()
+    def test_get_pr_changed_files(self, m):
+        m.get("https://api.github.com/repos/test_owner/test_repo/pulls/1/files", text='[{"filename": "test.py"}]')
+        m.get("https://raw.githubusercontent.com/test_owner/test_repo/main/test.py", text='print("Hello, World!")')
+        result = get_pr_changed_files("test_owner", "test_repo", 1)
+        self.assertEqual(result, {"test.py": 'print("Hello, World!")'})
 
-def test_comment_on_pr():
-    with patch('requests.get') as mocked_get:
-        with patch('requests.post') as mocked_post:
-            mocked_get.return_value.status_code = 200
-            mocked_get.return_value.json.return_value = []
-            mocked_post.return_value.status_code = 201
-            assert comment_on_pr('owner', 'repo', 1, "Test comment") is None  # function does not return anything
+    @mock.patch("your_module.invoke_bedrock_with_retry")
+    def test_analyze_and_remediate_code(self, mock_invoke):
+        mock_invoke.return_value = {"content": [{"text": "No issues detected"}]}
+        result = analyze_and_remediate_code({"test.py": 'print("Hello, World!")'})
+        self.assertEqual(result, {"test.py": 'print("Hello, World!")'})
 
-def test_rollback_main_branch():
-    with patch('requests.get') as mocked_get:
-        with patch('requests.patch') as mocked_patch:
-        with patch('requests.delete') as mocked_delete:
-            mocked_get.return_value.status_code = 200
-            mocked_get.return_value.json.return_value = {"object": {"sha": "1234"}}
-            mocked_patch.return_value.status_code = 200
-            mocked_delete.return_value.status_code = 204
-            assert rollback_main_branch('owner', 'repo', 'backup', 'faulty') is None  # function does not return anything
+    @requests_mock.Mocker()
+    def test_create_new_branch(self, m):
+        m.get("https://api.github.com/repos/test_owner/test_repo/git/refs/heads/main", text='{"object": {"sha": "123"}}')
+        m.post("https://api.github.com/repos/test_owner/test_repo/git/refs", text='{}', status_code=201)
+        m.post("https://api.github.com/repos/test_owner/test_repo/git/blobs", text='{"sha": "456"}')
+        m.get("https://api.github.com/repos/test_owner/test_repo/git/trees/123", text='{"sha": "789"}')
+        m.post("https://api.github.com/repos/test_owner/test_repo/git/trees", text='{"sha": "000"}')
+        m.post("https://api.github.com/repos/test_owner/test_repo/git/commits", text='{"sha": "111"}')
+        m.patch("https://api.github.com/repos/test_owner/test_repo/git/refs/heads/remediation-1", text='{}')
+        result = create_new_branch("test_owner", "test_repo", "main", "remediation-1", {"test.py": 'print("Hello, World!")'})
+        self.assertEqual(result, "remediation-1")
 
-def test_merge_remediated_branch():
-    with patch('requests.get') as mocked_get:
-        with patch('requests.post') as mocked_post:
-        with patch('requests.put') as mocked_put:
-        with patch('requests.patch') as mocked_patch:
-            mocked_get.return_value.status_code = 200
-            mocked_get.return_value.json.return_value = {"object": {"sha": "1234"}}
-            mocked_post.return_value.status_code = 201
-            mocked_post.return_value.json.return_value = {"number": 2}
-            mocked_put.return_value.status_code = 200
-            mocked_patch.return_value.status_code = 200
-            assert merge_remediated_branch('owner', 'repo', 'main', 'remediation', 1) is None  # function does not return anything
+    @requests_mock.Mocker()
+    def test_merge_remediated_branch(self, m):
+        m.get("https://api.github.com/repos/test_owner/test_repo/git/refs/heads/main", text='{"object": {"sha": "123"}}')
+        m.post("https://api.github.com/repos/test_owner/test_repo/git/refs", text='{}', status_code=201)
+        m.post("https://api.github.com/repos/test_owner/test_repo/pulls", text='{"number": 2}')
+        m.put("https://api.github.com/repos/test_owner/test_repo/pulls/2/merge", text='{}')
+        m.patch("https://api.github.com/repos/test_owner/test_repo/pulls/1", text='{}')
+        merge_remediated_branch("test_owner", "test_repo", "main", "remediation-1", 1)
 
-def test_invoke_bedrock_with_retry():
-    with patch('boto3.client') as mocked_client:
-        mocked_client.return_value.invoke_model.return_value = {"body": {"read.return_value": '{"content": [{"text": "No issues detected"}]}'}}
+    @requests_mock.Mocker()
+    def test_comment_on_pr(self, m):
+        m.get("https://api.github.com/repos/test_owner/test_repo/issues/1/comments", text='[]')
+        m.post("https://api.github.com/repos/test_owner/test_repo/issues/1/comments", text='{}', status_code=201)
+        comment_on_pr("test_owner", "test_repo", 1, "Test Comment")
+
+    @mock.patch("your_module.get_open_prs")
+    @mock.patch("your_module.get_pr_changed_files")
+    @mock.patch("your_module.analyze_and_remediate_code")
+    @mock.patch("your_module.comment_on_pr")
+    @mock.patch("your_module.create_new_branch")
+    @mock.patch("your_module.merge_remediated_branch")
+    def test_lambda_handler(self, mock_merge, mock_create, mock_comment, mock_analyze, mock_get_files, mock
