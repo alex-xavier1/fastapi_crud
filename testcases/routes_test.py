@@ -1,67 +1,60 @@
 # Unit tests for routes.py
 
-You asked for unit tests for a Flask application, but the provided code snippet is a FastAPI application. Also, you seem to be using SQLAlchemy for the database. I'm going to provide a sample pytest unit test for FastAPI and SQLAlchemy. Here are the unit tests:
-
 ```python
-# This script contains unit tests for the API endpoints in the FastAPI application.
-
+# This is a unit test module for testing CRUD operations in the FastAPI router module
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from main import app, get_db
-from database import Base
-from crud import get_item, get_items, create_item, update_item, delete_item
-from schemas import ItemCreate
-from unittest.mock import patch, MagicMock
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
+from unittest.mock import Mock, patch
+from database import SessionLocal
+import crud, schemas
+import main
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def test_read_items():
+    with patch.object(crud, 'get_items') as mock_get_items:
+        mock_get_items.return_value = [{'name': 'item1', 'description': 'description', 'price': 100}]
+        result = main.read_items(Mock(spec=Session))
+        assert result == [{'name': 'item1', 'description': 'description', 'price': 100}]
 
-Base.metadata.create_all(bind=engine)
+def test_read_item_success():
+    with patch.object(crud, 'get_item') as mock_get_item:
+        mock_get_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
+        result = main.read_item(1, Mock(spec=Session))
+        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
 
-@patch('main.get_db')
-def test_read_items(mock_get_db):
-    mock_get_db.return_value = TestingSessionLocal()
-    with TestClient(app) as client:
-        response = client.get("/items")
-        assert response.status_code == 200
+def test_read_item_failure():
+    with patch.object(crud, 'get_item') as mock_get_item:
+        mock_get_item.return_value = None
+        with pytest.raises(HTTPException):
+            main.read_item(1, Mock(spec=Session))
 
-@patch('main.get_db')
-def test_read_item(mock_get_db):
-    mock_get_db.return_value = TestingSessionLocal()
-    with TestClient(app) as client:
-        response = client.get("/items/1")
-        assert response.status_code in [200, 404]
+def test_create_item():
+    with patch.object(crud, 'create_item') as mock_create_item:
+        mock_create_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
+        result = main.create_item({'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
+        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
 
-@patch('main.get_db')
-def test_create_item(mock_get_db):
-    mock_get_db.return_value = TestingSessionLocal()
-    with TestClient(app) as client:
-        response = client.post("/items", json={"name": "test_item", "description": "test description"})
-        assert response.status_code == 200
+def test_update_item_success():
+    with patch.object(crud, 'update_item') as mock_update_item:
+        mock_update_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
+        result = main.update_item(1, {'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
+        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
 
-@patch('main.get_db')
-def test_update_item(mock_get_db):
-    mock_get_db.return_value = TestingSessionLocal()
-    with TestClient(app) as client:
-        response = client.put("/items/1", json={"name": "test_item", "description": "test description"})
-        assert response.status_code in [200, 404]
+def test_update_item_failure():
+    with patch.object(crud, 'update_item') as mock_update_item:
+        mock_update_item.return_value = None
+        with pytest.raises(HTTPException):
+            main.update_item(1, {'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
 
-@patch('main.get_db')
-def test_delete_item(mock_get_db):
-    mock_get_db.return_value = TestingSessionLocal()
-    with TestClient(app) as client:
-        response = client.delete("/items/1")
-        assert response.status_code in [200, 404]
+def test_delete_item_success():
+    with patch.object(crud, 'delete_item') as mock_delete_item:
+        mock_delete_item.return_value = {'detail': 'Item deleted'}
+        result = main.delete_item(1, Mock(spec=Session))
+        assert result == {'detail': 'Item deleted'}
+
+def test_delete_item_failure():
+    with patch.object(crud, 'delete_item') as mock_delete_item:
+        mock_delete_item.return_value = None
+        with pytest.raises(HTTPException):
+            main.delete_item(1, Mock(spec=Session))
 ```
-
-A few notes about these tests:
-
-- The `@patch('main.get_db')` decorator is used to mock the `get_db` function. This allows us to replace the actual database session with our `TestingSessionLocal` session.
-- We use the `TestClient` from `fastapi.testclient` to make HTTP requests to our endpoints.
-- We check the status code of the response to verify the request was successful. For the read, update, and delete item endpoints, we check for either a 200 or a 404 status code, as a 404 might be returned if the item doesn't exist.
-- These are basic tests and more detailed assertions (e.g. checking the response body) could be added depending on the specifics of your application.
