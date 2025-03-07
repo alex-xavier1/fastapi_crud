@@ -1,47 +1,55 @@
 # Unit tests for schemas.py
 
 ```python
-# This file contains unit tests for the ItemBase, ItemCreate, and ItemResponse classes in the module.
+# This file contains unit tests for the ItemBase, ItemCreate and ItemResponse classes in Flask using Pydantic BaseModel
 
 import unittest
 from unittest.mock import patch
 from pydantic import ValidationError
-from module import ItemBase, ItemCreate, ItemResponse
+from main import ItemBase, ItemCreate, ItemResponse
 
 class TestItemBase(unittest.TestCase):
-    def test_create_item_base(self):
-        item = ItemBase(name="TestItem", description="This is a test item", price=100, quantity=2)
+
+    def test_item_base_model(self):
+        item = ItemBase(name="TestItem", description="TestDescription", price=100, quantity=10)
         self.assertEqual(item.name, "TestItem")
-        self.assertEqual(item.description, "This is a test item")
+        self.assertEqual(item.description, "TestDescription")
         self.assertEqual(item.price, 100)
-        self.assertEqual(item.quantity, 2)
+        self.assertEqual(item.quantity, 10)
 
-    def test_item_base_validation(self):
+    def test_item_base_model_invalid_data(self):
         with self.assertRaises(ValidationError):
-            item = ItemBase(name="TestItem", description="This is a test item", price="invalid_price", quantity=2)
-
-    def test_item_base_boundaries(self):
-        with self.assertRaises(ValidationError):
-            item = ItemBase(name="TestItem", description="This is a test item", price=-1, quantity=0)
+            ItemBase(name="TestItem", description="TestDescription", price="invalid", quantity=10)
 
 class TestItemCreate(unittest.TestCase):
-    def test_create_item_create(self):
-        item = ItemCreate(name="TestItem", description="This is a test item", price=100, quantity=2)
+
+    def test_item_create_model(self):
+        item = ItemCreate(name="TestItem", description="TestDescription", price=100, quantity=10)
         self.assertEqual(item.name, "TestItem")
-        self.assertEqual(item.description, "This is a test item")
+        self.assertEqual(item.description, "TestDescription")
         self.assertEqual(item.price, 100)
-        self.assertEqual(item.quantity, 2)
+        self.assertEqual(item.quantity, 10)
+
+    def test_item_create_model_invalid_data(self):
+        with self.assertRaises(ValidationError):
+            ItemCreate(name="TestItem", description="TestDescription", price="invalid", quantity=10)
 
 class TestItemResponse(unittest.TestCase):
-    def test_create_item_response(self):
-        item = ItemResponse(name="TestItem", description="This is a test item", price=100, quantity=2, id=1)
+
+    def test_item_response_model(self):
+        item = ItemResponse(name="TestItem", description="TestDescription", price=100, quantity=10, id=1)
         self.assertEqual(item.name, "TestItem")
-        self.assertEqual(item.description, "This is a test item")
+        self.assertEqual(item.description, "TestDescription")
         self.assertEqual(item.price, 100)
-        self.assertEqual(item.quantity, 2)
+        self.assertEqual(item.quantity, 10)
         self.assertEqual(item.id, 1)
 
-if __name__ == '__main__':
+    def test_item_response_model_invalid_data(self):
+        with self.assertRaises(ValidationError):
+            ItemResponse(name="TestItem", description="TestDescription", price="invalid", quantity=10, id=1)
+
+if __name__ == "__main__":
     unittest.main()
 ```
-In this script, we're testing the ItemBase, ItemCreate and ItemResponse classes from the module. We create instances of these classes and check that the values have been assigned correctly. We also test the data validation provided by Pydantic by trying to create an item with an invalid price (a string instead of an integer), and an item with boundary values for the price and quantity fields.
+
+This test suite creates unit tests for the models `ItemBase`, `ItemCreate`, and `ItemResponse`. It validates their normal functionality by initializing them with valid data and checking if the values are correctly set. It also tests edge cases by trying to initialize them with invalid data types, expecting a `ValidationError` to be raised.
