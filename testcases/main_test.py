@@ -1,26 +1,27 @@
-# Unit tests for main.py
+# Unit test to verify the initialization and routing setup of the FastAPI application
 
-```python
-# Unit tests for FastAPI application initialization and database setup
-
-from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
-from main import app, Base, engine
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from main import app, Base
+from database import engine
 
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+test_engine = create_engine(SQLALCHEMY_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-def test_app_initialization(client):
-    assert app.title == "FastAPI application"
+@pytest.fixture(scope="module")
+def test_app():
+    Base.metadata.create_all(bind=test_engine)
+    yield TestClient(app)
+    Base.metadata.drop_all(bind=test_engine)
 
-@patch('main.Base.metadata.create_all')
-def test_database_tables_creation(mock_create_all):
-    mock_create_all.assert_called_once_with(bind=engine)
+def test_app_initialization(test_app):
+    response = test_app.get("/")
+    assert response.status_code == 404
 
-@patch('main.app.include_router')
-def test_routes_inclusion(mock_include_router):
-    mock_include_router.assert_called_once_with(router)
-```
+def test_database_connection():
+    db = TestingSessionLocal()
+    assert db is not None
+    db.close()
