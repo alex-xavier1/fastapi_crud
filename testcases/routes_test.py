@@ -1,65 +1,76 @@
-# Unit tests for the items module, covering CRUD operations and error handling
+# Test module for verifying the functionality of the items API endpoints
 
-from unittest.mock import MagicMock, patch
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-import crud, schemas
-from main import app  # Assuming the FastAPI app is in a file named main.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from main import app, get_db
+from database import Base, SessionLocal
+from crud import create_item as crud_create_item
+from schemas import ItemCreate
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base.metadata.create_all(bind=engine)
+
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
 def test_read_items():
-    with patch("crud.get_items") as mock_get_items:
-        mock_get_items.return_value = [schemas.ItemResponse(id=1, name="Item1", description="Desc1")]
-        response = client.get("/items")
-        assert response.status_code == 200
-        assert response.json() == [{"id": 1, "name": "Item1", "description": "Desc1"}]
-
-def test_read_item_found():
-    with patch("crud.get_item") as mock_get_item:
-        mock_get_item.return_value = schemas.ItemResponse(id=1, name="Item1", description="Desc1")
-        response = client.get("/items/1")
-        assert response.status_code == 200
-        assert response.json() == {"id": 1, "name": "Item1", "description": "Desc1"}
-
-def test_read_item_not_found():
-    with patch("crud.get_item") as mock_get_item:
-        mock_get_item.return_value = None
-        response = client.get("/items/1")
-        assert response.status_code == 404
-        assert response.json() == {"detail": "Item not found"}
+    response = client.get("/items")
+    assert response.status_code == 200
+    assert response.json() == []
 
 def test_create_item():
-    with patch("crud.create_item") as mock_create_item:
-        mock_create_item.return_value = schemas.ItemResponse(id=1, name="Item1", description="Desc1")
-        response = client.post("/items", json={"name": "Item1", "description": "Desc1"})
-        assert response.status_code == 200
-        assert response.json() == {"id": 1, "name": "Item1", "description": "Desc1"}
+    item = ItemCreate(name="Test Item", description="Test Description")
+    response = client.post("/items", json=item.dict())
+    assert response.status_code == 200
+    assert response.json()["name"] == "Test Item"
 
-def test_update_item_found():
-    with patch("crud.update_item") as mock_update_item:
-        mock_update_item.return_value = schemas.ItemResponse(id=1, name="UpdatedItem", description="UpdatedDesc")
-        response = client.put("/items/1", json={"name": "UpdatedItem", "description": "UpdatedDesc"})
-        assert response.status_code == 200
-        assert response.json() == {"id": 1, "name": "UpdatedItem", "description": "UpdatedDesc"}
+def test_read_item():
+    item = ItemCreate(name="Test Item", description="Test Description")
+    created_item = crud_create_item(db=SessionLocal(), item=item)
+    response = client.get(f"/items/{created_item.id}")
+    assert response.status_code == 200
+    assert response.json()["name"] == "Test Item"
+
+def test_read_item_not_found():
+    response = client.get("/items/999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Item not found"
+
+def test_update_item():
+    item = ItemCreate(name="Test Item", description="Test Description")
+    created_item = crud_create_item(db=SessionLocal(), item=item)
+    updated_item = ItemCreate(name="Updated Item", description="Updated Description")
+    response = client.put(f"/items/{created_item.id}", json=updated_item.dict())
+    assert response.status_code == 200
+    assert response.json()["name"] == "Updated Item"
 
 def test_update_item_not_found():
-    with patch("crud.update_item") as mock_update_item:
-        mock_update_item.return_value = None
-        response = client.put("/items/1", json={"name": "UpdatedItem", "description": "UpdatedDesc"})
-        assert response.status_code == 404
-        assert response.json() == {"detail": "Item not found"}
+    updated_item = ItemCreate(name="Updated Item", description="Updated Description")
+    response = client.put("/items/999", json=updated_item.dict())
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Item not found"
 
-def test_delete_item_found():
-    with patch("crud.delete_item") as mock_delete_item:
-        mock_delete_item.return_value = schemas.ItemResponse(id=1, name="Item1", description="Desc1")
-        response = client.delete("/items/1")
-        assert response.status_code == 200
-        assert response.json() == {"detail": "Item deleted"}
+def test_delete_item():
+    item = ItemCreate(name="Test Item", description="Test Description")
+    created_item = crud_create_item(db=SessionLocal(), item=item)
+    response = client.delete(f"/items/{created_item.id}")
+    assert response.status_code == 200
+    assert response.json()["detail"] == "Item deleted"
 
 def test_delete_item_not_found():
-    with patch("crud.delete_item") as mock_delete_item:
-        mock_delete_item.return_value = None
-        response = client.delete("/items/1")
-        assert response.status_code == 404
-        assert response.json() == {"detail": "Item not found"}
+    response = client.delete("/items/999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Item not found"
