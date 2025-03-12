@@ -1,61 +1,68 @@
-# Unit tests for lambda.py
+# Unit test for the remediation module
 
-```python
-# Unit tests for the module handling GitHub PRs and code remediation
+import pytest
+from unittest.mock import Mock, patch
+from fastapi.testclient import TestClient
+from main import app  # Assuming the module is imported in a FastAPI app
 
-import unittest
-from unittest.mock import patch, MagicMock
-from your_module import get_open_prs, get_pr_changed_files, analyze_and_remediate_code, create_new_branch, comment_on_pr, rollback_main_branch, merge_remediated_branch, lambda_handler, invoke_bedrock_with_retry
+client = TestClient(app)
 
-class TestGitHubPRModule(unittest.TestCase):
+@pytest.fixture
+def mock_bedrock():
+    with patch('boto3.client') as boto_mock:
+        bedrock_mock = boto_mock.return_value
+        bedrock_mock.invoke_model.return_value = {
+            'body': '{"content": [{"text": "Issue 1"}, {"text": "Issue 2"}]}'.encode('utf-8')
+        }
+        yield bedrock_mock
 
-    @patch('requests.get')
-    def test_get_open_prs(self, mock_get):
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"number": 1, "title": "Test PR"}]
-        result = get_open_prs("test_owner", "test_repo")
-        self.assertEqual(result, [{"number": 1, "title": "Test PR"}])
+@pytest.fixture
+def mock_requests():
+    with patch('requests.get') as get_mock, patch('requests.post') as post_mock, patch('requests.patch') as patch_mock, patch('requests.delete') as delete_mock:
+        get_mock.return_value.status_code = 200
+        get_mock.return_value.json.return_value = {"object": {"sha": "base_sha"}}
+        post_mock.return_value.status_code = 201
+        post_mock.return_value.json.return_value = {"sha": "new_sha"}
+        patch_mock.return_value.status_code = 200
+        delete_mock.return_value.status_code = 204
+        yield get_mock, post_mock, patch_mock, delete_mock
 
-    @patch('requests.get')
-    def test_get_pr_changed_files(self, mock_get):
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"filename": "test.py"}]
-        mock_raw_response = MagicMock()
-        mock_raw_response.status_code = 200
-        mock_raw_response.text = "print('test')"
-        mock_get.side_effect = [mock_get.return_value, mock_raw_response]
-        result = get_pr_changed_files("test_owner", "test_repo", 1)
-        self.assertEqual(result, {"test.py": "print('test')"})
+def test_get_open_prs(mock_requests):
+    get_mock, _, _, _ = mock_requests
+    response = client.get("/get_open_prs?owner=test_owner&repo=test_repo")
+    assert response.status_code == 200
+    get_mock.assert_called()
 
-    @patch('your_module.invoke_bedrock_with_retry')
-    def test_analyze_and_remediate_code(self, mock_bedrock):
-        mock_bedrock.side_effect = [{"content": [{"text": "Issue 1"}, {"text": "Issue 2"}]}, {"content": [{"text": "Remediated code"}]}]
-        code_repo = {"test.py": "def test(): pass"}
-        result = analyze_and_remediate_code(code_repo)
-        self.assertEqual(result, {"test.py": "Remediated code"})
+def test_get_pr_changed_files(mock_requests):
+    get_mock, _, _, _ = mock_requests
+    response = client.get("/get_pr_changed_files?owner=test_owner&repo=test_repo&pr_number=1")
+    assert response.status_code == 200
+    get_mock.assert_called()
 
-    @patch('requests.get')
-    @patch('requests.post')
-    @patch('requests.patch')
-    def test_create_new_branch(self, mock_patch, mock_post, mock_get):
-        mock_get.side_effect = [MagicMock(status_code=200, json=lambda: {"object": {"sha": "base_sha"}}), MagicMock(status_code=404)]
-        mock_post.side_effect = [MagicMock(status_code=201, json=lambda: {"sha": "blob_sha"}), MagicMock(status_code=201, json=lambda: {"sha": "tree_sha"}), MagicMock(status_code=201, json=lambda: {"sha": "commit_sha"})]
-        mock_patch.return_value.status_code = 200
-        remediations = {"test.py": "remediated code"}
-        result = create_new_branch("test_owner", "test_repo", "main", "new_branch", remediations)
-        self.assertEqual(result, "new_branch")
+def test_analyze_and_remediate_code(mock_bedrock):
+    code_repo = {"test.py": "print('Hello, world!')"}
+    remediations = client.post("/analyze_and_remediate_code", json=code_repo)
+    assert remediations.status_code == 200
 
-    @patch('requests.get')
-    @patch('requests.post')
-    def test_comment_on_pr(self, mock_post, mock_get):
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = []
-        mock_post.return_value.status_code = 201
-        comment_on_pr("test_owner", "test_repo", 1, "Test comment")
-        mock_post.assert_called()
+def test_create_new_branch(mock_requests):
+    _, post_mock, _, _ = mock_requests
+    response = client.post("/create_new_branch", json={"owner": "test_owner", "repo": "test_repo", "base_branch": "main", "new_branch_name": "new_branch", "remediations": {"test.py": "remediated_code"}})
+    assert response.status_code == 200
+    post_mock.assert_called()
 
-    @patch('requests.get')
-    @patch('requests.patch')
-    @patch('requests.delete')
-    def test_rollback_main_branch(self, mock_delete, mock_patch, mock_get):
-        mock_get.side_effect = [MagicMock(status_code=200, json=lambda: {"object": {"sha": "backup_sha"}}), Magic
+def test_comment_on_pr(mock_requests):
+    _, post_mock, _, _ = mock_requests
+    response = client.post("/comment_on_pr", json={"owner": "test_owner", "repo": "test_repo", "pr_number": 1, "comments": "Test comment"})
+    assert response.status_code == 200
+    post_mock.assert_called()
+
+def test_rollback_main_branch(mock_requests):
+    _, _, patch_mock, delete_mock = mock_requests
+    response = client.post("/rollback_main_branch", json={"owner": "test_owner", "repo": "test_repo", "backup_branch": "backup", "faulty_branch": "faulty"})
+    assert response.status_code == 200
+    patch_mock.assert_called()
+    delete_mock.assert_called()
+
+def test_merge_remediated_branch(mock_requests):
+    _, post_mock, _, _ = mock_requests
+    response = client.post("/merge_remediated_branch", json={"owner": "test_owner", "repo": "test_repo",
