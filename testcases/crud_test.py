@@ -1,45 +1,67 @@
-# Unit tests for CRUD operations on items
+# Test module for CRUD operations on items in FastAPI application
 
-from unittest import TestCase, mock
+from unittest.mock import MagicMock, patch
 from sqlalchemy.orm import Session
 from models import Item
 from schemas import ItemCreate
-from your_module import get_items, get_item, create_item, update_item, delete_item
+import crud
 
-class TestItemCRUD(TestCase):
-    @mock.patch('your_module.Session')
-    def test_get_items(self, MockSession):
-        db = MockSession.return_value
-        db.query.return_value.all.return_value = [Item(id=1, name="item1"), Item(id=2, name="item2")]
-        items = get_items(db)
-        self.assertEqual(len(items), 2)
+def test_get_items():
+    db_mock = MagicMock(spec=Session)
+    items = [Item(id=1, name="item1", description="desc1"), Item(id=2, name="item2", description="desc2")]
+    db_mock.query(Item).all.return_value = items
+    result = crud.get_items(db_mock)
+    assert len(result) == 2
+    assert result[0].name == "item1"
+    assert result[1].name == "item2"
 
-    @mock.patch('your_module.Session')
-    def test_get_item(self, MockSession):
-        db = MockSession.return_value
-        db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="item1")
-        item = get_item(db, 1)
-        self.assertEqual(item.id, 1)
+def test_get_item_found():
+    db_mock = MagicMock(spec=Session)
+    item = Item(id=1, name="item1", description="desc1")
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = item
+    result = crud.get_item(db_mock, 1)
+    assert result.name == "item1"
 
-    @mock.patch('your_module.Session')
-    def test_create_item(self, MockSession):
-        db = MockSession.return_value
-        item_create = ItemCreate(name="new_item")
-        db.query.return_value.filter.return_value.first.return_value = None
-        new_item = create_item(db, item_create)
-        self.assertEqual(new_item.name, "new_item")
+def test_get_item_not_found():
+    db_mock = MagicMock(spec=Session)
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = None
+    result = crud.get_item(db_mock, 1)
+    assert result is None
 
-    @mock.patch('your_module.Session')
-    def test_update_item(self, MockSession):
-        db = MockSession.return_value
-        db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="item1")
-        item_update = ItemCreate(name="updated_item")
-        updated_item = update_item(db, 1, item_update)
-        self.assertEqual(updated_item.name, "updated_item")
+def test_create_item():
+    db_mock = MagicMock(spec=Session)
+    item_create = ItemCreate(name="new_item", description="new_desc")
+    db_item = Item(id=3, name="new_item", description="new_desc")
+    db_mock.add(db_item)
+    db_mock.commit()
+    db_mock.refresh(db_item)
+    result = crud.create_item(db_mock, item_create)
+    assert result.name == "new_item"
 
-    @mock.patch('your_module.Session')
-    def test_delete_item(self, MockSession):
-        db = MockSession.return_value
-        db.query.return_value.filter.return_value.first.return_value = Item(id=1, name="item1")
-        deleted_item = delete_item(db, 1)
-        self.assertIsNotNone(deleted_item)
+def test_update_item_found():
+    db_mock = MagicMock(spec=Session)
+    item_create = ItemCreate(name="updated_item", description="updated_desc")
+    db_item = Item(id=1, name="item1", description="desc1")
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = db_item
+    crud.update_item(db_mock, 1, item_create)
+    assert db_item.name == "updated_item"
+
+def test_update_item_not_found():
+    db_mock = MagicMock(spec=Session)
+    item_create = ItemCreate(name="updated_item", description="updated_desc")
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = None
+    result = crud.update_item(db_mock, 1, item_create)
+    assert result is None
+
+def test_delete_item_found():
+    db_mock = MagicMock(spec=Session)
+    db_item = Item(id=1, name="item1", description="desc1")
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = db_item
+    result = crud.delete_item(db_mock, 1)
+    assert result.name == "item1"
+
+def test_delete_item_not_found():
+    db_mock = MagicMock(spec=Session)
+    db_mock.query(Item).filter(Item.id == 1).first.return_value = None
+    result = crud.delete_item(db_mock, 1)
+    assert result is None
