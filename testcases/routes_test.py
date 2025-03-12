@@ -1,60 +1,65 @@
 # Unit tests for routes.py
 
 ```python
-# This is a unit test module for testing CRUD operations in the FastAPI router module
-import pytest
-from fastapi import Depends, HTTPException
+# Unit tests for the items module ensuring correct behavior and error handling
+
+from unittest.mock import MagicMock, patch
+from fastapi.testclient import TestClient
+from main import app, crud, schemas
 from sqlalchemy.orm import Session
-from unittest.mock import Mock, patch
-from database import SessionLocal
-import crud, schemas
-import main
 
-def test_read_items():
-    with patch.object(crud, 'get_items') as mock_get_items:
-        mock_get_items.return_value = [{'name': 'item1', 'description': 'description', 'price': 100}]
-        result = main.read_items(Mock(spec=Session))
-        assert result == [{'name': 'item1', 'description': 'description', 'price': 100}]
+client = TestClient(app)
 
-def test_read_item_success():
-    with patch.object(crud, 'get_item') as mock_get_item:
-        mock_get_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
-        result = main.read_item(1, Mock(spec=Session))
-        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
+def fake_get_db():
+    db = MagicMock(spec=Session)
+    yield db
+    db.close.assert_called_once()
 
-def test_read_item_failure():
-    with patch.object(crud, 'get_item') as mock_get_item:
-        mock_get_item.return_value = None
-        with pytest.raises(HTTPException):
-            main.read_item(1, Mock(spec=Session))
+@patch("main.crud.get_items", return_value=[schemas.ItemResponse(id=1, name="item1", description="desc1")])
+def test_read_items(mock_get_items):
+    response = client.get("/items", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    mock_get_items.assert_called_once()
 
-def test_create_item():
-    with patch.object(crud, 'create_item') as mock_create_item:
-        mock_create_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
-        result = main.create_item({'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
-        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
+@patch("main.crud.get_item", return_value=schemas.ItemResponse(id=1, name="item1", description="desc1"))
+def test_read_item(mock_get_item):
+    response = client.get("/items/1", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    mock_get_item.assert_called_once_with(mock_get_item.call_args.args[0], 1)
 
-def test_update_item_success():
-    with patch.object(crud, 'update_item') as mock_update_item:
-        mock_update_item.return_value = {'name': 'item1', 'description': 'description', 'price': 100}
-        result = main.update_item(1, {'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
-        assert result == {'name': 'item1', 'description': 'description', 'price': 100}
+@patch("main.crud.get_item", return_value=None)
+def test_read_item_not_found(mock_get_item):
+    response = client.get("/items/1", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
 
-def test_update_item_failure():
-    with patch.object(crud, 'update_item') as mock_update_item:
-        mock_update_item.return_value = None
-        with pytest.raises(HTTPException):
-            main.update_item(1, {'name': 'item1', 'description': 'description', 'price': 100}, Mock(spec=Session))
+@patch("main.crud.create_item", return_value=schemas.ItemResponse(id=1, name="new_item", description="new_desc"))
+def test_create_item(mock_create_item):
+    response = client.post("/items", json={"name": "new_item", "description": "new_desc"}, headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 201
+    mock_create_item.assert_called_once()
 
-def test_delete_item_success():
-    with patch.object(crud, 'delete_item') as mock_delete_item:
-        mock_delete_item.return_value = {'detail': 'Item deleted'}
-        result = main.delete_item(1, Mock(spec=Session))
-        assert result == {'detail': 'Item deleted'}
+@patch("main.crud.update_item", return_value=schemas.ItemResponse(id=1, name="updated_item", description="updated_desc"))
+def test_update_item(mock_update_item):
+    response = client.put("/items/1", json={"name": "updated_item", "description": "updated_desc"}, headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    mock_update_item.assert_called_once_with(mock_update_item.call_args.args[0], 1, mock_update_item.call_args.args[2])
 
-def test_delete_item_failure():
-    with patch.object(crud, 'delete_item') as mock_delete_item:
-        mock_delete_item.return_value = None
-        with pytest.raises(HTTPException):
-            main.delete_item(1, Mock(spec=Session))
+@patch("main.crud.update_item", return_value=None)
+def test_update_item_not_found(mock_update_item):
+    response = client.put("/items/1", json={"name": "updated_item", "description": "updated_desc"}, headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+@patch("main.crud.delete_item", return_value=schemas.ItemResponse(id=1, name="item1", description="desc1"))
+def test_delete_item(mock_delete_item):
+    response = client.delete("/items/1", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Item deleted"}
+
+@patch("main.crud.delete_item", return_value=None)
+def test_delete_item_not_found(mock_delete_item):
+    response = client.delete("/items/1", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
 ```
