@@ -1,55 +1,48 @@
 # Unit tests for models.py
 
 ```python
-# This module contains unit tests for the Item and Task models
+# Unit tests for Item and Task models to ensure correct initialization and attribute handling
 
-import unittest
-from unittest.mock import patch
+from unittest import TestCase, mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from your_project.models import Item, Task, Base
+from your_module import Base, Item, Task
 
-class ModelsTest(unittest.TestCase):
+class TestModels(TestCase):
     def setUp(self):
         engine = create_engine('sqlite:///:memory:')
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         self.session = Session()
 
-    @patch('your_project.models.Item')
-    def test_create_item(self, MockItem):
-        item = MockItem.return_value
-        item.name = "Test Item"
-        item.description = "Test Description"
-        item.price = 10
-        item.quantity = 5
+    def test_item_initialization(self):
+        item = Item(name="Test Item", description="Test Description", price=100, quantity=5)
         self.session.add(item)
         self.session.commit()
-        self.assertEqual(self.session.query(Item).count(), 1)
+        self.assertEqual(item.name, "Test Item")
+        self.assertEqual(item.description, "Test Description")
+        self.assertEqual(item.price, 100)
+        self.assertEqual(item.quantity, 5)
 
-    @patch('your_project.models.Item')
-    def test_item_border_values(self, MockItem):
-        item = MockItem.return_value
-        item.name = "Test Item"
-        item.description = "Test Description"
-        item.price = 0
-        item.quantity = 0
+    def test_item_missing_name(self):
+        with self.assertRaises(TypeError):
+            item = Item(description="Test Description", price=100, quantity=5)
+
+    def test_item_negative_price(self):
+        with self.assertRaises(ValueError):
+            item = Item(name="Test Item", description="Test Description", price=-100, quantity=5)
+
+    def test_item_zero_quantity(self):
+        item = Item(name="Test Item", description="Test Description", price=100, quantity=0)
         self.session.add(item)
         self.session.commit()
-        self.assertEqual(self.session.query(Item).count(), 1)
+        self.assertEqual(item.quantity, 0)
 
-    @patch('your_project.models.Task')
-    def test_create_task(self, MockTask):
-        task = MockTask.return_value
-        task.name = "Test Task"
-        self.session.add(task)
-        self.session.commit()
-        self.assertEqual(self.session.query(Task).count(), 1)
-
-    def tearDown(self):
-        self.session.close()
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_task_initialization(self):
+        with mock.patch('sqlalchemy.ext.declarative.declarative_base.classes.Task') as MockTask:
+            MockTask.id = mock.MagicMock()
+            MockTask.name = mock.MagicMock()
+            task = Task()
+            self.assertTrue(hasattr(task, 'id'))
+            self.assertTrue(hasattr(task, 'name'))
 ```
-This test suite includes unit tests for the Item and Task models. The `setUp` method sets up a SQLite database in memory for each test. Instead of interacting with a real database, we use the `unittest.mock.patch()` function to replace the actual `Item` and `Task` models with mock objects. This allows us to isolate the behavior of the code under test from its dependencies. The `test_create_item`, `test_item_border_values` and `test_create_task` methods test the creation of Item and Task objects. The `tearDown` method closes the database session after each test.
