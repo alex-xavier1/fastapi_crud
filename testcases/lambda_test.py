@@ -1,71 +1,73 @@
-# Unit test for the module to ensure all functions work correctly with mocked dependencies
+# Unit tests for the provided module
 
 import pytest
-from unittest.mock import patch, Mock
+from fastapi.testclient import TestClient
+from unittest.mock import Mock, patch
 import requests
-import json
-import os
 import boto3
 from botocore.exceptions import ClientError
-from fastapi.testclient import TestClient
+
+from your_module import get_open_prs, get_pr_changed_files, analyze_and_remediate_code, create_new_branch, comment_on_pr, rollback_main_branch, merge_remediated_branch, lambda_handler, invoke_bedrock_with_retry
 
 @pytest.fixture
-def mock_github_token():
-    os.environ['GITHUB_TOKEN'] = 'mocked-token'
+def mock_requests():
+    with patch('requests.get') as mock_get, patch('requests.post') as mock_post, patch('requests.patch') as mock_patch, patch('requests.delete') as mock_delete:
+        yield mock_get, mock_post, mock_patch, mock_delete
 
 @pytest.fixture
-def client():
-    from main import app  # Adjust import based on your FastAPI app structure
-    return TestClient(app)
+def mock_boto3():
+    with patch('boto3.client') as mock_client:
+        yield mock_client
 
-def test_get_open_prs(mock_github_token):
-    with patch('requests.get') as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"number": 1, "title": "Test PR"}]
-        from main import get_open_prs  # Adjust import based on your module structure
-        prs = get_open_prs("test_owner", "test_repo")
-        assert len(prs) == 1
-        assert prs[0]["number"] == 1
+def test_get_open_prs(mock_requests):
+    mock_get, _, _, _ = mock_requests
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = [{"number": 1, "title": "Test PR"}]
+    prs = get_open_prs("test_owner", "test_repo")
+    assert prs == [{"number": 1, "title": "Test PR"}]
 
-def test_get_pr_changed_files(mock_github_token):
-    with patch('requests.get') as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"filename": "test.py"}]
-        from main import get_pr_changed_files  # Adjust import based on your module structure
-        files = get_pr_changed_files("test_owner", "test_repo", 1)
-        assert "test.py" in files
+def test_get_pr_changed_files(mock_requests):
+    mock_get, _, _, _ = mock_requests
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = [{"filename": "test.py"}]
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.text = "print('Hello World')"
+    files = get_pr_changed_files("test_owner", "test_repo", 1)
+    assert files == {"test.py": "print('Hello World')"}
 
 def test_analyze_and_remediate_code():
-    from main import analyze_and_remediate_code  # Adjust import based on your module structure
-    code_repo = {"test.py": "print('hello world')"}
+    code_repo = {"test.py": "print('Hello World')"}
     remediations = analyze_and_remediate_code(code_repo)
-    assert "test.py" in remediations
+    assert remediations == {"test.py": "print('Hello World')"}
 
-def test_create_new_branch(mock_github_token):
-    with patch('requests.get') as mock_get, patch('requests.post') as mock_post:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"object": {"sha": "mocked_sha"}}
-        mock_post.return_value.status_code = 201
-        from main import create_new_branch  # Adjust import based on your module structure
-        branch_name = create_new_branch("test_owner", "test_repo", "main", "new_branch", {"test.py": "print('hello world')"})
-        assert branch_name == "new_branch"
+@patch('your_module.invoke_bedrock_with_retry')
+def test_analyze_code(mock_invoke, mock_boto3):
+    mock_invoke.return_value = {"content": [{"text": "No issues found"}]}
+    code = "print('Hello World')"
+    issues = analyze_code(code)
+    assert issues == "No issues found"
 
-def test_comment_on_pr(mock_github_token):
-    with patch('requests.get') as mock_get, patch('requests.post') as mock_post:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = []
-        mock_post.return_value.status_code = 201
-        from main import comment_on_pr  # Adjust import based on your module structure
-        comment_on_pr("test_owner", "test_repo", 1, "Test comment")
-        mock_post.assert_called_once()
+@patch('your_module.invoke_bedrock_with_retry')
+def test_remediate_code(mock_invoke, mock_boto3):
+    mock_invoke.return_value = {"content": [{"text": "Remediated code"}]}
+    code = "print('Hello World')"
+    issues = ["Issue 1"]
+    remediated_code = remediate_code(code, issues)
+    assert remediated_code == "Remediated code"
 
-def test_rollback_main_branch(mock_github_token):
-    with patch('requests.get') as mock_get, patch('requests.patch') as mock_patch, patch('requests.delete') as mock_delete:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"object": {"sha": "mocked_sha"}}
-        mock_patch.return_value.status_code = 200
-        mock_delete.return_value.status_code = 204
-        from main import rollback_main_branch  # Adjust import based on your module structure
-        rollback_main_branch("test_owner", "test_repo", "backup_branch", "faulty_branch")
-        mock_patch.assert_called_once()
-        mock_delete.
+def test_create_new_branch(mock_requests):
+    mock_get, mock_post, _, _ = mock_requests
+    mock_get.side_effect = [
+        Mock(status_code=200, json=lambda: {"object": {"sha": "base_commit_sha"}}),
+        Mock(status_code=404)
+    ]
+    mock_post.return_value.status_code = 201
+    mock_post.return_value.json.return_value = {"sha": "blob_sha"}
+    remediations = {"test.py": "print('Hello World')"}
+    branch_name = create_new_branch("test_owner", "test_repo", "main", "new_branch", remediations)
+    assert branch_name == "new_branch"
+
+def test_comment_on_pr(mock_requests):
+    mock_get, mock_post, _, _ = mock_requests
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.
