@@ -1,4 +1,4 @@
-# Test module for verifying the functionality of the items API endpoints
+# Unit tests for FastAPI items module, ensuring proper functionality and error handling
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +26,7 @@ app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
-def test_read_items():
+def test_read_items_empty():
     response = client.get("/items")
     assert response.status_code == 200
     assert response.json() == []
@@ -39,7 +39,7 @@ def test_create_item():
 
 def test_read_item():
     item = ItemCreate(name="Test Item", description="Test Description")
-    created_item = crud_create_item(db=SessionLocal(), item=item)
+    created_item = crud_create_item(db=next(override_get_db()), item=item)
     response = client.get(f"/items/{created_item.id}")
     assert response.status_code == 200
     assert response.json()["name"] == "Test Item"
@@ -51,7 +51,7 @@ def test_read_item_not_found():
 
 def test_update_item():
     item = ItemCreate(name="Test Item", description="Test Description")
-    created_item = crud_create_item(db=SessionLocal(), item=item)
+    created_item = crud_create_item(db=next(override_get_db()), item=item)
     updated_item = ItemCreate(name="Updated Item", description="Updated Description")
     response = client.put(f"/items/{created_item.id}", json=updated_item.dict())
     assert response.status_code == 200
@@ -65,7 +65,7 @@ def test_update_item_not_found():
 
 def test_delete_item():
     item = ItemCreate(name="Test Item", description="Test Description")
-    created_item = crud_create_item(db=SessionLocal(), item=item)
+    created_item = crud_create_item(db=next(override_get_db()), item=item)
     response = client.delete(f"/items/{created_item.id}")
     assert response.status_code == 200
     assert response.json()["detail"] == "Item deleted"
