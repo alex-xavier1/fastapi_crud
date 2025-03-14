@@ -1,48 +1,52 @@
-# Unit test to verify the validation and serialization of Item models in a FastAPI application
+# Unit test for validating ItemBase, ItemCreate, and ItemResponse models
 
-from unittest import IsolateTestCase
-from unittest.mock import patch, MagicMock
+from unittest import IsolateLoader, main as unittest_main
+from unittest.mock import patch
 from fastapi import FastAPI
-from pydantic import ValidationError
+from fastapi.testclient import TestClient
 from your_module import ItemBase, ItemCreate, ItemResponse
 
-class TestItemModels(IsolateTestCase):
+class TestItemModels(IsolateLoader):
     def test_item_base_valid(self):
-        item = ItemBase(name="Test Item", description="A test item", price=10, quantity=5)
-        self.assertEqual(item.name, "Test Item")
-        self.assertEqual(item.description, "A test item")
+        item = ItemBase(name="Test", description="Test Item", price=10, quantity=5)
+        self.assertEqual(item.name, "Test")
+        self.assertEqual(item.description, "Test Item")
         self.assertEqual(item.price, 10)
         self.assertEqual(item.quantity, 5)
 
     def test_item_base_invalid_type(self):
-        with self.assertRaises(ValidationError):
-            ItemBase(name="Test Item", description="A test item", price="ten", quantity=5)
+        with self.assertRaises(ValueError):
+            ItemBase(name="Test", description="Test Item", price="ten", quantity=5)
 
     def test_item_create_valid(self):
-        item = ItemCreate(name="Test Item", description="A test item", price=10, quantity=5)
-        self.assertEqual(item.name, "Test Item")
-        self.assertEqual(item.description, "A test item")
+        item = ItemCreate(name="Test", description="Test Item", price=10, quantity=5)
+        self.assertEqual(item.name, "Test")
+        self.assertEqual(item.description, "Test Item")
         self.assertEqual(item.price, 10)
         self.assertEqual(item.quantity, 5)
 
     def test_item_response_valid(self):
-        item = ItemResponse(id=1, name="Test Item", description="A test item", price=10, quantity=5)
+        item = ItemResponse(id=1, name="Test", description="Test Item", price=10, quantity=5)
         self.assertEqual(item.id, 1)
-        self.assertEqual(item.name, "Test Item")
-        self.assertEqual(item.description, "A test item")
+        self.assertEqual(item.name, "Test")
+        self.assertEqual(item.description, "Test Item")
         self.assertEqual(item.price, 10)
         self.assertEqual(item.quantity, 5)
 
     def test_item_response_orm_mode(self):
-        orm_item = MagicMock()
-        orm_item.id = 1
-        orm_item.name = "Test Item"
-        orm_item.description = "A test item"
-        orm_item.price = 10
-        orm_item.quantity = 5
-        item = ItemResponse.from_orm(orm_item)
+        class MockORMObject:
+            id = 1
+            name = "Test"
+            description = "Test Item"
+            price = 10
+            quantity = 5
+
+        item = ItemResponse.from_orm(MockORMObject())
         self.assertEqual(item.id, 1)
-        self.assertEqual(item.name, "Test Item")
-        self.assertEqual(item.description, "A test item")
+        self.assertEqual(item.name, "Test")
+        self.assertEqual(item.description, "Test Item")
         self.assertEqual(item.price, 10)
         self.assertEqual(item.quantity, 5)
+
+if __name__ == '__main__':
+    unittest_main()
